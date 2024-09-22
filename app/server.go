@@ -43,6 +43,6 @@ func handleClient(conn net.Conn) {
 // Handles a request and returns a response
 func handleRequest(r []byte) []byte {
 	// We need to decode the request
-	fmt.Println(r)
+	fmt.Println(string(r))
 	return []byte{}
 }
