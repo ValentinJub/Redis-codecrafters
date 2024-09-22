@@ -5,7 +5,21 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 )
+
+const CRLF = "\r\n"
+
+type request []byte
+
+func (r request) String() {
+	for x, c := range r {
+		fmt.Printf("'%s'", string(c))
+		if x != len(r)-1 {
+			fmt.Printf(", ")
+		}
+	}
+}
 
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
@@ -35,14 +49,38 @@ func handleClient(conn net.Conn) {
 			return
 		}
 
-		request := buff[:bytesRead]
-		handleRequest(request)
+		request := request(buff[:bytesRead])
+		response := handleRequest(request)
+		_, err = conn.Write(response)
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
 	}
 }
 
 // Handles a request and returns a response
-func handleRequest(r []byte) []byte {
-	// We need to decode the request
-	fmt.Println(string(r))
-	return []byte{}
+func handleRequest(r request) []byte {
+	// The request can be stringifyied
+	req := strings.Split(string(r), CRLF)
+	fmt.Println(req)
+	if len(req) < 1 {
+		fmt.Printf("Error: received a request with less than one elements: %v", req)
+		return []byte{}
+	}
+
+	// numOfElem, err := strconv.Atoi(req[0][1:])
+	// if err != nil {
+	// 	fmt.Printf("Error: unable to convert, see strconv error: %s", err)
+	// 	return []byte{}
+	// }
+
+	// req = req[1:]
+	// // Go through each element of the RESP array
+	// for range numOfElem {
+	// 	length := req[0]
+	// 	arg := req[1]
+	// }
+
+	return []byte("+PONG\r\n")
 }
