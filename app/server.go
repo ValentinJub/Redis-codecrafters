@@ -69,18 +69,5 @@ func handleRequest(r request) []byte {
 		return []byte{}
 	}
 
-	// numOfElem, err := strconv.Atoi(req[0][1:])
-	// if err != nil {
-	// 	fmt.Printf("Error: unable to convert, see strconv error: %s", err)
-	// 	return []byte{}
-	// }
-
-	// req = req[1:]
-	// // Go through each element of the RESP array
-	// for range numOfElem {
-	// 	length := req[0]
-	// 	arg := req[1]
-	// }
-
 	return []byte("+PONG\r\n")
 }
