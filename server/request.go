@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 )
@@ -17,7 +16,7 @@ func NewRequest(data []string) *Request {
 }
 
 func (r *Request) Decode() error {
-	fmt.Printf("About to decode: %v\n", r.data)
+	// fmt.Printf("About to decode: %v\n", r.data)
 	partsNumber, err := strconv.Atoi(r.data[0][1:])
 	if err != nil {
 		return err

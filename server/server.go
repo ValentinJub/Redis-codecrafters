@@ -18,10 +18,11 @@ type MasterServer struct {
 	address  string
 	port     string
 	listener net.Listener
+	cache    map[string]string
 }
 
 func NewMasterServer(add, port string) *MasterServer {
-	return &MasterServer{address: add, port: port}
+	return &MasterServer{address: add, port: port, cache: make(map[string]string)}
 }
 
 // Initialise the server, creating a listener
@@ -42,7 +43,19 @@ func (s *MasterServer) Listen() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		connHandler := NewConnHandler(conn)
+		connHandler := NewConnHandler(conn, s)
 		go connHandler.HandleConnection()
+	}
+}
+
+func (s *MasterServer) Set(key, value string) {
+	s.cache[key] = value
+}
+
+func (s *MasterServer) Get(key string) string {
+	if v, ok := s.cache[key]; !ok {
+		return "(nil)"
+	} else {
+		return v
 	}
 }

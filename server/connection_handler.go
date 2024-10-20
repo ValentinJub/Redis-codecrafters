@@ -12,11 +12,12 @@ type ConnectionHandler interface {
 }
 
 type ConnHandler struct {
-	conn net.Conn
+	conn   net.Conn
+	server *MasterServer
 }
 
-func NewConnHandler(conn net.Conn) *ConnHandler {
-	return &ConnHandler{conn: conn}
+func NewConnHandler(conn net.Conn, s *MasterServer) *ConnHandler {
+	return &ConnHandler{conn: conn, server: s}
 }
 
 // Handle incoming TCP Requests
@@ -27,7 +28,6 @@ func (c *ConnHandler) HandleConnection() {
 		bytesRead, err := c.conn.Read(buff)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				fmt.Println("Closing connection")
 				c.conn.Close()
 				break
 			}
@@ -36,9 +36,8 @@ func (c *ConnHandler) HandleConnection() {
 		}
 		// The data read from the TCP stream
 		request := buff[:bytesRead]
-		fmt.Printf("Raw request '%s'\n", request)
 		// Handles the decoded request and produce an answer
-		reqHandler := NewRequestHandler(request)
+		reqHandler := NewRequestHandler(request, c.server)
 		response := reqHandler.HandleRequest()
 		_, err = c.conn.Write(response)
 		if err != nil {

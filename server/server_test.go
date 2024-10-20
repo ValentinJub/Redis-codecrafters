@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"os/exec"
 	"testing"
 )
@@ -33,13 +34,10 @@ var TestCases = []struct {
 	},
 }
 
-func StartServer() *exec.Cmd {
-	cmd := exec.Command("sh", APP)
-	err := cmd.Start()
-	if err != nil {
-		panic(err)
-	}
-	return cmd
+func StartMasterTestServer() *MasterServer {
+	server := NewMasterServer("127.0.0.1", "6379")
+	server.Init()
+	return server
 }
 
 func runCommand(command string, args ...string) (string, error) {
@@ -48,14 +46,14 @@ func runCommand(command string, args ...string) (string, error) {
 	return string(output), err
 }
 
-func TestPing(t *testing.T) {
-	serverCmd := StartServer()
-	defer serverCmd.Process.Kill() // Ensure the server is stopped after the test
-
+func TestCommands(t *testing.T) {
+	server := StartMasterTestServer()
+	go server.Listen()
 	for _, tc := range TestCases {
 		t.Run(tc.description, func(t *testing.T) {
 			output, err := runCommand(tc.command, tc.args...)
 			if err != nil {
+				fmt.Printf("Output: %s\n", output)
 				t.Fatalf("error while running the test: %s", err)
 			}
 			if output != tc.expectedOutput {
