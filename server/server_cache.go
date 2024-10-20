@@ -59,10 +59,9 @@ func (s *ServerCache) IsExpired(key string) bool {
 				delete(s.cache, key)
 				return true
 			}
-			return false
 		}
-		return false
 	} else {
 		return true
 	}
+	return false
 }

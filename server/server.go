@@ -19,6 +19,7 @@ type MasterServer struct {
 	port     string
 	listener net.Listener
 	cache    Cache
+	rdb      RDBManager
 }
 
 func NewMasterServer(add, port string) *MasterServer {
@@ -45,5 +46,16 @@ func (s *MasterServer) Listen() {
 		}
 		connHandler := NewConnHandler(conn, s)
 		go connHandler.HandleConnection()
+	}
+}
+
+// Set the RDB configuration
+func (s *MasterServer) SetRDBConfig(dir, dbfile string) {
+	s.rdb = NewRDBManager(dir, dbfile)
+	keys, err := s.rdb.Read("key")
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(keys)
 	}
 }

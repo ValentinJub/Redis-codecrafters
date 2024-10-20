@@ -2,8 +2,16 @@ package server
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
+)
+
+var (
+	rEX = regexp.MustCompile(`^[Ee][Xx]$`) // Set the specified expire time, in seconds.
+	rPX = regexp.MustCompile(`^[Pp][Xx]$`) // Set the specified expire time, in milliseconds.
+	rNX = regexp.MustCompile(`^[Nn][Xx]$`) // Only set the key if it does not already exist.
+	rXX = regexp.MustCompile(`^[Xx][Xx]$`) // Only set the key if it does not already exist.
 )
 
 type RequestHandler interface {
@@ -40,8 +48,32 @@ func (r *ReqHandler) HandleRequest() []byte {
 		return r.set(req)
 	case "GET":
 		return r.get(req)
+	case "CONFIG":
+		return r.config(req)
 	default:
 		return newSimpleString("Unknown command")
+	}
+}
+
+func (r *ReqHandler) config(req *Request) []byte {
+	if len(req.args) < 1 {
+		return newSimpleString("Error: CONFIG command requires at least 1 argument (GET or SET)")
+	} else if req.args[0] == "GET" {
+		return r.configGet(req.args[1])
+	}
+	return []byte{0}
+}
+
+func (r *ReqHandler) configGet(key string) []byte {
+	switch key {
+	case "dir":
+		dir, _ := r.server.rdb.Info()
+		return newBulkArray("dir", dir)
+	case "dbfilename":
+		_, fn := r.server.rdb.Info()
+		return newBulkArray("dbfilename", fn)
+	default:
+		return newBulkString("")
 	}
 }
 
@@ -57,13 +89,20 @@ func (r *ReqHandler) echo(req *Request) []byte {
 }
 
 type SetArgs struct {
-	px int64
+	expiry int64 // expiry in milliseconds
+	nx     bool  // only set the key if it does not already exist
+	xx     bool  // only set the key if it already exists
 }
 
+// Extracts the SET command arguments
 func extractSetArgs(args []string) (SetArgs, error) {
 	var setArgs SetArgs
+	expireSet := false
 	for i := 0; i < len(args); i++ {
-		if args[i] == "px" {
+		if rPX.MatchString(args[i]) {
+			if expireSet {
+				return setArgs, fmt.Errorf("Expiry is already set")
+			}
 			if i+1 >= len(args) {
 				return setArgs, fmt.Errorf("PX requires a value")
 			}
@@ -71,8 +110,27 @@ func extractSetArgs(args []string) (SetArgs, error) {
 			if err != nil {
 				return setArgs, err
 			}
-			setArgs.px = int64(px)
+			setArgs.expiry = int64(px)
+			expireSet = true
+		} else if rEX.MatchString(args[i]) {
+			if expireSet {
+				return setArgs, fmt.Errorf("Expiry is already set")
+			}
+			if i+1 >= len(args) {
+				return setArgs, fmt.Errorf("EX requires a value")
+			}
+			px, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return setArgs, err
+			}
+			setArgs.expiry = int64(px) * 1000 // convert to milliseconds
+			expireSet = true
+		} else if rNX.MatchString(args[i]) {
+			setArgs.nx = true
+		} else if rXX.MatchString(args[i]) {
+			setArgs.xx = true
 		}
+
 	}
 	return setArgs, nil
 }
@@ -85,9 +143,18 @@ func (r *ReqHandler) set(req *Request) []byte {
 	if err != nil {
 		return newSimpleString(fmt.Sprintf("Error: %s", err))
 	}
+	if args.nx {
+		if _, ok := r.server.cache.Get(req.args[0]); ok == nil {
+			return newBulkString("")
+		}
+	} else if args.xx {
+		if _, ok := r.server.cache.Get(req.args[0]); ok != nil {
+			return newSimpleString("")
+		}
+	}
 	r.server.cache.Set(req.args[0], req.args[1])
-	if args.px > 0 {
-		r.server.cache.Expire(req.args[0], args.px)
+	if args.expiry > 0 {
+		r.server.cache.Expire(req.args[0], args.expiry)
 	}
 
 	return newSimpleString("OK")
@@ -99,15 +166,4 @@ func (r *ReqHandler) get(req *Request) []byte {
 	}
 	v, _ := r.server.cache.Get(req.args[0])
 	return newBulkString(v)
-}
-
-func newSimpleString(s string) []byte {
-	return []byte(fmt.Sprintf("+%s%s", s, CRLF))
-}
-
-func newBulkString(s string) []byte {
-	if s == "" {
-		return []byte("$-1" + CRLF)
-	}
-	return []byte(fmt.Sprintf("$%d%s%s%s", len(s), CRLF, s, CRLF))
 }
