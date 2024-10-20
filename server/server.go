@@ -9,7 +9,8 @@ import (
 type Server interface {
 	// Initialise the server creating a TCP listener
 	Init()
-	// Listen for TCP connections using our TCP listener
+	// Listen for TCP connections using our TCP listener.
+	// Encapsulates the request handling process
 	Listen()
 }
 
@@ -23,6 +24,7 @@ func NewMasterServer(add, port string) *MasterServer {
 	return &MasterServer{address: add, port: port}
 }
 
+// Initialise the server, creating a listener
 func (s *MasterServer) Init() {
 	l, err := net.Listen("tcp", fmt.Sprintf("%s:%s", s.address, s.port))
 	if err != nil {
@@ -32,8 +34,8 @@ func (s *MasterServer) Init() {
 	s.listener = l
 }
 
+// Event loop, handles requests inside it
 func (s *MasterServer) Listen() {
-	// Event loop
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {

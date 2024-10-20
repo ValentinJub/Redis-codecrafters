@@ -20,12 +20,32 @@ func NewRequestHandler(request []byte) *ReqHandler {
 // Handles a request and returns a response
 func (r *ReqHandler) HandleRequest() []byte {
 	// The request can be stringifyied
-	req := strings.Split(string(r.request), CRLF)
-	fmt.Println(req)
-	if len(req) < 1 {
-		fmt.Printf("Error: received a request with less than one elements: %v", req)
+	re := strings.Split(string(r.request), CRLF)
+	fmt.Println(re)
+	req := NewRequest(re)
+	err := req.Decode()
+	if err != nil {
+		fmt.Printf("error while decoding the request: %s", err)
 		return []byte{}
 	}
 
-	return []byte("+PONG\r\n")
+	switch req.command {
+	case "PING":
+		if len(req.args) > 0 {
+			return newBulkString(strings.Join(req.args, " "))
+		}
+		return newSimpleString("PONG")
+	case "ECHO":
+		return newBulkString(strings.Join(req.args, " "))
+	default:
+		return []byte{}
+	}
+}
+
+func newSimpleString(s string) []byte {
+	return []byte(fmt.Sprintf("+%s%s", s, CRLF))
+}
+
+func newBulkString(s string) []byte {
+	return []byte(fmt.Sprintf("$%d%s%s%s", len(s), CRLF, s, CRLF))
 }
