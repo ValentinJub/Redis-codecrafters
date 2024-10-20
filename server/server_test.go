@@ -32,6 +32,24 @@ var TestCases = []struct {
 		args:           []string{"ECHO", "'Hello World'"},
 		expectedOutput: "'Hello World'\n",
 	},
+	{
+		description:    "Set command",
+		command:        "redis-cli",
+		args:           []string{"SET", "name", "John"},
+		expectedOutput: "OK\n",
+	},
+	{
+		description:    "Get command",
+		command:        "redis-cli",
+		args:           []string{"GET", "name"},
+		expectedOutput: "John\n",
+	},
+	{
+		description:    "Get command",
+		command:        "redis-cli",
+		args:           []string{"GET", "unknown"},
+		expectedOutput: "(nil)\n",
+	},
 }
 
 func StartMasterTestServer() *MasterServer {
