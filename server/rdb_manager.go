@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"time"
 
 	log "github.com/codecrafters-io/redis-starter-go/logger"
 	utils "github.com/codecrafters-io/redis-starter-go/utils"
@@ -48,13 +49,20 @@ func (r *RDBmanager) LoadRDBToCache() error {
 	// Load the objects into the cache, making sure to not add an object that has expired
 	for k, v := range objs {
 		if v.expiry != 0 {
-			if r.server.cache.IsExpired(k) {
+			now := time.Now().UnixMilli()
+			if v.expiry < uint64(now) {
+				fmt.Printf("key %s has expired - not loading it to cache\n", k)
 				continue
 			}
-		}
-		err := r.server.cache.Set(k, v.value)
-		if err != nil {
-			fmt.Printf("error while setting key %s: %s\n", k, err)
+			err := r.server.cache.SetExpiry(k, v.value, v.expiry)
+			if err != nil {
+				fmt.Printf("error while setting key %s with expiry:%d - error: %s\n", k, v.expiry, err)
+			}
+		} else {
+			err := r.server.cache.Set(k, v.value)
+			if err != nil {
+				fmt.Printf("error while setting key %s: %s\n", k, err)
+			}
 		}
 	}
 	return nil

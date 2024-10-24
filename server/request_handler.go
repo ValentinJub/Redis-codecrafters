@@ -162,7 +162,7 @@ func (r *ReqHandler) set(req *Request) []byte {
 	}
 	r.server.cache.Set(req.args[0], req.args[1])
 	if args.expiry > 0 {
-		r.server.cache.Expire(req.args[0], uint64(args.expiry))
+		r.server.cache.ExpireIn(req.args[0], uint64(args.expiry))
 	}
 
 	return newSimpleString("OK")

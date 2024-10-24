@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"strconv"
 )
@@ -120,7 +122,7 @@ func (r *RDBDecoder) decodeDatabase() (*RDBdatabase, error) {
 			fmt.Printf("Offset resize DB: %d\n", r.offset)
 		case opcode == OPCodeExpireTimeMS:
 			obj := Object{}
-			obj.expiry = uint64(r.readUInt64())
+			obj.expiry = r.decodeExpiryMS()
 			vtype := ValueType[r.readUInt8()]
 			key := r.readString()
 			if vtype == "String Encoding" {
@@ -129,7 +131,7 @@ func (r *RDBDecoder) decodeDatabase() (*RDBdatabase, error) {
 			db.objects[key] = obj
 		case opcode == OPCodeExpireTime:
 			obj := Object{}
-			obj.expiry = uint64(r.readUInt32())
+			obj.expiry = uint64(r.decodeExpiryS())
 			vtype := ValueType[r.readUInt8()]
 			key := r.readString()
 			if vtype == "String Encoding" {
@@ -273,6 +275,26 @@ func (r *RDBDecoder) readLength() int {
 		r.offset++
 		return -1
 	}
+}
+
+func (r *RDBDecoder) decodeExpiryMS() uint64 {
+	var n uint64
+	if err := binary.Read(bytes.NewReader(r.data[r.offset:r.offset+8]), binary.LittleEndian, &n); err != nil {
+		fmt.Println(err)
+		r.offset += 8
+		return 0
+	}
+	r.offset += 8
+	return n
+}
+
+func (r *RDBDecoder) decodeExpiryS() uint32 {
+	var n uint32
+	if err := binary.Read(bytes.NewReader(r.data[r.offset:r.offset+4]), binary.LittleEndian, &n); err != nil {
+		fmt.Println(err)
+		return 0
+	}
+	return n
 }
 
 func (r *RDBDecoder) readUInt64() uint64 {

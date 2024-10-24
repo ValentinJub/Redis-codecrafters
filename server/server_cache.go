@@ -9,9 +9,10 @@ import (
 
 type Cache interface {
 	Set(key string, value string) error
+	SetExpiry(key string, value string, expiry uint64) error
 	Get(key string) (string, error)
 	Keys(key string) []string
-	Expire(key string, milliseconds uint64) error
+	ExpireIn(key string, milliseconds uint64) error
 	IsExpired(key string) bool
 }
 
@@ -30,6 +31,11 @@ func NewServerCache() *ServerCache {
 
 func (s *ServerCache) Set(key string, value string) error {
 	s.cache[key] = Object{value: value}
+	return nil
+}
+
+func (s *ServerCache) SetExpiry(key string, value string, expiry uint64) error {
+	s.cache[key] = Object{value: value, expiry: expiry}
 	return nil
 }
 
@@ -76,7 +82,8 @@ func parseKey(key string) *regexp.Regexp {
 	return regexp.MustCompile(key)
 }
 
-func (s *ServerCache) Expire(key string, milliseconds uint64) error {
+// ExpireIn sets the expiry time of a key in milliseconds from now
+func (s *ServerCache) ExpireIn(key string, milliseconds uint64) error {
 	if v, ok := s.cache[key]; !ok {
 		return fmt.Errorf("key not found")
 	} else {
