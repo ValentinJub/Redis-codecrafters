@@ -50,9 +50,17 @@ func (r *ReqHandler) HandleRequest() []byte {
 		return r.get(req)
 	case "CONFIG":
 		return r.config(req)
+	case "KEYS":
+		return r.keys(req)
 	default:
 		return newSimpleString("Unknown command")
 	}
+}
+
+func (r *ReqHandler) keys(req *Request) []byte {
+	// Dangerous, need to make sure args[0] is not empty and that no more keys follow
+	keys := r.server.cache.Keys(req.args[0])
+	return newBulkArray(keys...)
 }
 
 func (r *ReqHandler) config(req *Request) []byte {
@@ -154,7 +162,7 @@ func (r *ReqHandler) set(req *Request) []byte {
 	}
 	r.server.cache.Set(req.args[0], req.args[1])
 	if args.expiry > 0 {
-		r.server.cache.Expire(req.args[0], args.expiry)
+		r.server.cache.Expire(req.args[0], uint64(args.expiry))
 	}
 
 	return newSimpleString("OK")

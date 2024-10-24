@@ -2,13 +2,17 @@ package server
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 )
 
 type Cache interface {
 	Set(key string, value string) error
 	Get(key string) (string, error)
-	Expire(key string, milliseconds int64) error
+	Keys(key string) []string
+	Expire(key string, milliseconds uint64) error
+	IsExpired(key string) bool
 }
 
 type ServerCache struct {
@@ -17,7 +21,7 @@ type ServerCache struct {
 
 type Object struct {
 	value  string
-	expiry int64
+	expiry uint64
 }
 
 func NewServerCache() *ServerCache {
@@ -40,12 +44,44 @@ func (s *ServerCache) Get(key string) (string, error) {
 	}
 }
 
-func (s *ServerCache) Expire(key string, milliseconds int64) error {
+func (s *ServerCache) Keys(key string) []string {
+	keys := make([]string, 0)
+	keyRegexp := parseKey(key)
+	fmt.Printf("keyRegexp: %s\n", keyRegexp.String())
+	for k := range s.cache {
+		if keyRegexp.MatchString(k) {
+			keys = append(keys, k)
+		}
+	}
+	return keys
+}
+
+/*
+Return a regex pattern made of key
+Supported glob-style patterns:
+
+	h?llo matches hello, hallo and hxllo
+	h*llo matches hllo and heeeello
+	h[ae]llo matches hello and hallo, but not hillo
+	h[^e]llo matches hallo, hbllo, ... but not hello
+	h[a-b]llo matches hallo and hbllo
+
+Not implemented yet: Use \ to escape special characters if you want to match them verbatim.
+*/
+func parseKey(key string) *regexp.Regexp {
+	key = strings.ReplaceAll(key, "*", ".*")
+	key = strings.ReplaceAll(key, "?", ".")
+	key = strings.ReplaceAll(key, "[", "[^")
+	key = strings.ReplaceAll(key, "]", "]")
+	return regexp.MustCompile(key)
+}
+
+func (s *ServerCache) Expire(key string, milliseconds uint64) error {
 	if v, ok := s.cache[key]; !ok {
 		return fmt.Errorf("key not found")
 	} else {
 		now := time.Now().UnixMilli()
-		v.expiry = now + milliseconds
+		v.expiry = uint64(now) + milliseconds
 		s.cache[key] = v
 		return nil
 	}
@@ -55,7 +91,7 @@ func (s *ServerCache) IsExpired(key string) bool {
 	if v, ok := s.cache[key]; ok {
 		if v.expiry != 0 {
 			now := time.Now().UnixMilli()
-			if now > v.expiry {
+			if uint64(now) >= v.expiry {
 				delete(s.cache, key)
 				return true
 			}

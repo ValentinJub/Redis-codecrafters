@@ -1,24 +1,17 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/codecrafters-io/redis-starter-go/server"
 )
 
+const (
+	SERVER_ADDR = "127.0.0.1"
+	SERVER_PORT = "6379"
+)
+
 func main() {
-
-	server := server.NewMasterServer("127.0.0.1", "6379")
-
-	if len(os.Args) > 4 {
-		if os.Args[1] == "--dir" && os.Args[3] == "--dbfilename" {
-			dir, dbfile := os.Args[2], os.Args[4]
-			server.SetRDBConfig(dir, dbfile)
-			fmt.Println("RDB configuration set")
-		}
-	}
-
+	server := server.NewMasterServer(SERVER_ADDR, SERVER_PORT)
+	server.LoadRDBToCache()
 	server.Init()
 	server.Listen()
 }

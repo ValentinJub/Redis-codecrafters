@@ -49,13 +49,26 @@ func (s *MasterServer) Listen() {
 	}
 }
 
-// Set the RDB configuration
-func (s *MasterServer) SetRDBConfig(dir, dbfile string) {
-	s.rdb = NewRDBManager(dir, dbfile)
-	keys, err := s.rdb.Read("key")
-	if err != nil {
-		fmt.Println(err)
+// Loads the RDB file into the cache
+func (s *MasterServer) LoadRDBToCache() error {
+	var dir, dbfile string
+	if len(os.Args) > 4 {
+		// Dangerous, the arguments could be in a different order than this one, but for the sake of simplicity we will assume this
+		if os.Args[1] == "--dir" && os.Args[3] == "--dbfilename" {
+			dir, dbfile = os.Args[2], os.Args[4]
+		} else {
+			fmt.Println("Invalid arguments provided")
+			return nil
+		}
 	} else {
-		fmt.Println(keys)
+		fmt.Println("No RDB file provided, skipping RDB load")
+		return nil
 	}
+	s.rdb = NewRDBManager(dir, dbfile, s)
+	err := s.rdb.LoadRDBToCache()
+	if err != nil {
+		fmt.Printf("error while loading RDB file: %s\n", err)
+		return err
+	}
+	return nil
 }

@@ -1,59 +1,76 @@
 package server
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"os"
+
+	log "github.com/codecrafters-io/redis-starter-go/logger"
+	utils "github.com/codecrafters-io/redis-starter-go/utils"
 )
 
+const (
+	Reset = "\033[0m"
+	Pink  = "\033[35m"
+)
+
+// Defines the actions to perfom on the RDB file
 type RDBManager interface {
-	// Read the RDB file and return the keys matching key
-	Read(key string) ([]string, error)
 	// Returns the directory and file name of the RDB file
 	Info() (string, string)
+	LoadRDBToCache() error
 }
 
-type RDB struct {
+type RDBmanager struct {
 	dir    string
 	dbfile string
+	server *MasterServer
 }
 
-func NewRDBManager(dir, dbfile string) *RDB {
-	return &RDB{dir: dir, dbfile: dbfile}
+func NewRDBManager(dir, dbfile string, s *MasterServer) *RDBmanager {
+	return &RDBmanager{dir: dir, dbfile: dbfile, server: s}
 }
 
-func (r *RDB) Info() (string, string) {
+func (r *RDBmanager) Info() (string, string) {
 	return r.dir, r.dbfile
 }
 
-func (r *RDB) Read(key string) ([]string, error) {
-	fmt.Println("Reading from RDB file")
-	err := r.openRDBFile()
+// Open the RDB file and load the data into the cache
+func (r *RDBmanager) LoadRDBToCache() error {
+	buffer, err := utils.ReadFile(r.dir + "/" + r.dbfile)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			// Create the file - WIP
-			return []string{}, err
-		}
-		return []string{}, err
+		return err
 	}
-	return []string{}, nil
+	data := buffer.Bytes()
+	log.LogByteStreamToHex(data)
+	objs, err := r.decodeRDB(data)
+	if err != nil {
+		return err
+	}
+	// Load the objects into the cache, making sure to not add an object that has expired
+	for k, v := range objs {
+		if v.expiry != 0 {
+			if r.server.cache.IsExpired(k) {
+				continue
+			}
+		}
+		err := r.server.cache.Set(k, v.value)
+		if err != nil {
+			fmt.Printf("error while setting key %s: %s\n", k, err)
+		}
+	}
+	return nil
 }
 
-func (r *RDB) openRDBFile() error {
-	f, err := os.Open(r.dir + "/" + r.dbfile)
+// Decode the RDB data and return a map of keys-values, with an expiry if any
+func (r *RDBmanager) decodeRDB(data []byte) (map[string]Object, error) {
+	d := NewRDBDecoder(data)
+	result, err := d.Decode()
 	if err != nil {
-		return err
+		return map[string]Object{}, err
 	}
-	defer f.Close()
-
-	b := new(bytes.Buffer)
-	_, err = b.ReadFrom(f)
-	if err != nil {
-		return err
+	// Perform type assertion
+	objects, ok := result.(map[string]Object)
+	if !ok {
+		return map[string]Object{}, fmt.Errorf("error: expected map[string]Object")
 	}
-
-	fmt.Printf("Opened file: %s\n", r.dir+"/"+r.dbfile)
-	fmt.Printf("File content (hex): %x\n", b.Bytes())
-	return nil
+	return objects, nil
 }
