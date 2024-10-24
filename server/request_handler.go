@@ -109,7 +109,7 @@ func extractSetArgs(args []string) (SetArgs, error) {
 	for i := 0; i < len(args); i++ {
 		if rPX.MatchString(args[i]) {
 			if expireSet {
-				return setArgs, fmt.Errorf("Expiry is already set")
+				return setArgs, fmt.Errorf("expiry is already set")
 			}
 			if i+1 >= len(args) {
 				return setArgs, fmt.Errorf("PX requires a value")
@@ -122,7 +122,7 @@ func extractSetArgs(args []string) (SetArgs, error) {
 			expireSet = true
 		} else if rEX.MatchString(args[i]) {
 			if expireSet {
-				return setArgs, fmt.Errorf("Expiry is already set")
+				return setArgs, fmt.Errorf("expiry is already set")
 			}
 			if i+1 >= len(args) {
 				return setArgs, fmt.Errorf("EX requires a value")
