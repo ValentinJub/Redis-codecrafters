@@ -64,9 +64,11 @@ func (r *ReqHandler) info(req *Request) []byte {
 		return newSimpleString("Error: INFO command requires at least 1 argument")
 	}
 	arg := req.args[0]
-	header := newBulkString("# " + arg)
-	role := newBulkString(fmt.Sprintf("role:%s", r.server.role))
-	return append(header, role...)
+	header := "# " + arg
+	role := fmt.Sprintf("role:%s", r.server.role)
+	return newBulkString(
+		header + "\n" + role + "\n",
+	)
 }
 
 func (r *ReqHandler) keys(req *Request) []byte {
