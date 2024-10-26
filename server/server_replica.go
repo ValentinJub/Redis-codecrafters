@@ -93,4 +93,18 @@ func (r *ReplicaServer) doHandshake(conn net.Conn) {
 		fmt.Println("Error syncing with master")
 		os.Exit(1)
 	}
+
+	// Send the PSYNC command
+	conn.Write(newBulkArray("PSYNC", "?", "-1"))
+	n, err = conn.Read(buf)
+	if err != nil {
+		fmt.Println("Error reading from master: ", err.Error())
+		os.Exit(1)
+	}
+	fmt.Printf("Received response from master: %s\n", buf[:n])
+	// if string(buf[:n]) != "+FULLRESYNC"+CRLF {
+	// 	fmt.Println("Error syncing with master")
+	// 	os.Exit(1)
+	// }
+
 }
