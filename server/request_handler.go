@@ -55,22 +55,39 @@ func (r *ReqHandler) HandleRequest() []byte {
 	case "INFO":
 		return r.info(req)
 	case "REPLCONF":
-		r.replicationConfig(req)
-		return newSimpleString("OK")
+		return r.replicationConfig(req)
+	case "PSYNC":
+		return r.psync(req)
 	default:
 		return newSimpleString("Unknown command")
 	}
 }
 
-func (r *ReqHandler) replicationConfig(req *Request) {
+func (r *ReqHandler) replicationConfig(req *Request) []byte {
+	infos := r.server.Info()
+	if infos["role"] != "master" {
+		return newSimpleString("Error: REPLCONF command can only be run on a master")
+	}
 	if len(req.args) < 2 {
-		return
+		return newSimpleString("Error: REPLCONF command requires at least 2 arguments")
 	}
 	for x, arg := range req.args {
 		if arg == "listening-port" {
 			r.server.AddReplica("127.0.0.1:" + req.args[x+1])
 		}
 	}
+	return newSimpleString("OK")
+}
+
+func (r *ReqHandler) psync(req *Request) []byte {
+	if len(req.args) < 2 {
+		return newSimpleString("Error: PSYNC command requires at least 2 arguments")
+	}
+	infos := r.server.Info()
+	if infos["role"] == "slave" {
+		return newSimpleString("Error: PSYNC command can only be run on a master")
+	}
+	return newBulkString("+FULLRESYNC " + infos["replicationID"] + " 0")
 }
 
 func (r *ReqHandler) info(req *Request) []byte {
