@@ -292,8 +292,10 @@ func (r *RDBDecoder) decodeExpiryS() uint32 {
 	var n uint32
 	if err := binary.Read(bytes.NewReader(r.data[r.offset:r.offset+4]), binary.LittleEndian, &n); err != nil {
 		fmt.Println(err)
+		r.offset += 4
 		return 0
 	}
+	r.offset += 4
 	return n
 }
 

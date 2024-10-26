@@ -22,8 +22,28 @@ type MasterServer struct {
 	rdb      RDBManager
 }
 
-func NewMasterServer(add, port string) *MasterServer {
-	return &MasterServer{address: add, port: port, cache: NewServerCache()}
+const (
+	SERVER_ADDR = "127.0.0.1"
+	SERVER_PORT = "6379"
+)
+
+func NewMasterServer(args map[string]string) *MasterServer {
+	port, ok := args["--port"]
+	if !ok {
+		port = SERVER_PORT
+	}
+	dir, ok := args["--dir"]
+	if !ok {
+		dir = ""
+	}
+	dbfile, ok := args["--dbfilename"]
+	if !ok {
+		dbfile = ""
+	}
+	server := &MasterServer{address: SERVER_ADDR, port: port, cache: NewServerCache()}
+	server.rdb = NewRDBManager(dir, dbfile, server)
+	fmt.Printf("Server created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
+	return server
 }
 
 // Initialise the server, creating a listener
@@ -51,20 +71,11 @@ func (s *MasterServer) Listen() {
 
 // Loads the RDB file into the cache
 func (s *MasterServer) LoadRDBToCache() error {
-	var dir, dbfile string
-	if len(os.Args) > 4 {
-		// Dangerous, the arguments could be in a different order than this one, but for the sake of simplicity we will assume this
-		if os.Args[1] == "--dir" && os.Args[3] == "--dbfilename" {
-			dir, dbfile = os.Args[2], os.Args[4]
-		} else {
-			fmt.Println("Invalid arguments provided")
-			return nil
-		}
-	} else {
-		fmt.Println("No RDB file provided, skipping RDB load")
+	d, f := s.rdb.Info()
+	if d == "" || f == "" {
+		fmt.Printf("Invalid RDB file path: '%s/%s', skipping loading\n", d, f)
 		return nil
 	}
-	s.rdb = NewRDBManager(dir, dbfile, s)
 	err := s.rdb.LoadRDBToCache()
 	if err != nil {
 		fmt.Printf("error while loading RDB file: %s\n", err)

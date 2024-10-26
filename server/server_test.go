@@ -133,7 +133,7 @@ var TestSetCases = []struct {
 }
 
 func StartMasterTestServer() *MasterServer {
-	server := NewMasterServer("127.0.0.1", "6379")
+	server := NewMasterServer(map[string]string{})
 	server.Init()
 	return server
 }
