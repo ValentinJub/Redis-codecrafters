@@ -6,7 +6,6 @@ import (
 
 type MasterServer struct {
 	Server
-	replicaAddress string
 }
 
 func NewMasterServer(args map[string]string) *MasterServer {
@@ -28,10 +27,10 @@ func NewMasterServer(args map[string]string) *MasterServer {
 	return server
 }
 
-func (m *MasterServer) GetMaster() *MasterServer {
-	return m
+func (m *MasterServer) AddReplica(addr string) {
+	m.replicas[addr] = true
 }
 
-func (m *MasterServer) SetReplicaAddress(addr string) {
-	m.replicaAddress = addr
+func (m *MasterServer) GetReplicas() map[string]bool {
+	return m.replicas
 }

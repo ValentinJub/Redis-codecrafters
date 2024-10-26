@@ -15,7 +15,9 @@ type RedisServer interface {
 	// Listen for TCP connections using our TCP listener.
 	// Encapsulates the request handling process
 	Listen()
-	GetMaster() *MasterServer
+	// Add a slave to the server
+	AddReplica(addr string)
+	GetReplicas() map[string]bool
 	// Returns various information about the server
 	Info() map[string]string
 	RDBManager
@@ -36,10 +38,15 @@ type Server struct {
 	cache             Cache
 	replicationID     string
 	replicationOffset int
+	replicas          map[string]bool
 }
 
-func (s *Server) GetMaster() *MasterServer {
-	return nil
+func (s *Server) AddReplica(addr string) {
+	return
+}
+
+func (s *Server) GetReplicas() map[string]bool {
+	return map[string]bool{}
 }
 
 // Initialise the server, creating a listener

@@ -68,9 +68,7 @@ func (r *ReqHandler) replicationConfig(req *Request) {
 	}
 	for x, arg := range req.args {
 		if arg == "listening-port" {
-			if r.server.GetMaster() != nil {
-				r.server.GetMaster().SetReplicaAddress("127.0.0.1:" + req.args[x+1])
-			}
+			r.server.AddReplica("127.0.0.1:" + req.args[x+1])
 		}
 	}
 }
