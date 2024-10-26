@@ -35,6 +35,10 @@ func NewReplicaServer(args map[string]string) *ReplicaServer {
 	return server
 }
 
+func (r *ReplicaServer) GetMaster() *MasterServer {
+	return nil
+}
+
 func (r *ReplicaServer) Init() {
 	r.SyncWithMaster()
 	r.Server.Init()

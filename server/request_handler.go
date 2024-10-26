@@ -54,8 +54,24 @@ func (r *ReqHandler) HandleRequest() []byte {
 		return r.keys(req)
 	case "INFO":
 		return r.info(req)
+	case "REPLCONF":
+		r.replicationConfig(req)
+		return newSimpleString("OK")
 	default:
 		return newSimpleString("Unknown command")
+	}
+}
+
+func (r *ReqHandler) replicationConfig(req *Request) {
+	if len(req.args) < 2 {
+		return
+	}
+	for x, arg := range req.args {
+		if arg == "listening-port" {
+			if r.server.GetMaster() != nil {
+				r.server.GetMaster().SetReplicaAddress("127.0.0.1:" + req.args[x+1])
+			}
+		}
 	}
 }
 
