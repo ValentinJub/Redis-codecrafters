@@ -47,7 +47,12 @@ func (r *ReqHandler) HandleRequest() []byte {
 	case "ECHO":
 		return r.echo(req)
 	case "SET":
-		return r.set(req)
+		resp, err := r.set(req)
+		if err != nil {
+			return newSimpleString("Error: " + err.Error())
+		}
+		go r.server.Propagate(req)
+		return resp
 	case "GET":
 		return r.get(req)
 	case "CONFIG":
@@ -74,9 +79,9 @@ func (r *ReqHandler) replicationConfig(req *Request) []byte {
 	if len(req.args) < 2 {
 		return newSimpleString("Error: REPLCONF command requires at least 2 arguments")
 	}
-	for x, arg := range req.args {
+	for _, arg := range req.args {
 		if arg == "listening-port" {
-			r.server.AddReplica("127.0.0.1:" + req.args[x+1])
+			r.server.AddReplica(r.conn)
 		}
 	}
 	return newSimpleString("OK")
@@ -193,21 +198,21 @@ func extractSetArgs(args []string) (SetArgs, error) {
 	return setArgs, nil
 }
 
-func (r *ReqHandler) set(req *Request) []byte {
+func (r *ReqHandler) set(req *Request) ([]byte, error) {
 	if len(req.args) < 2 {
-		return newSimpleString("Error: SET command requires at least 2 arguments")
+		return newSimpleString("error"), fmt.Errorf("Error: SET command requires at least 2 arguments")
 	}
 	args, err := extractSetArgs(req.args)
 	if err != nil {
-		return newSimpleString(fmt.Sprintf("Error: %s", err))
+		return newSimpleString("error"), fmt.Errorf("Error: while extracting set args")
 	}
 	if args.nx {
 		if _, ok := r.server.Get(req.args[0]); ok == nil {
-			return newBulkString("")
+			return newBulkString(""), fmt.Errorf("Error: key already exists")
 		}
 	} else if args.xx {
 		if _, ok := r.server.Get(req.args[0]); ok != nil {
-			return newSimpleString("")
+			return newSimpleString(""), fmt.Errorf("Error: key does not exist")
 		}
 	}
 	r.server.Set(req.args[0], req.args[1])
@@ -215,7 +220,7 @@ func (r *ReqHandler) set(req *Request) []byte {
 		r.server.ExpireIn(req.args[0], uint64(args.expiry))
 	}
 
-	return newSimpleString("OK")
+	return newSimpleString("OK"), nil
 }
 
 func (r *ReqHandler) get(req *Request) []byte {

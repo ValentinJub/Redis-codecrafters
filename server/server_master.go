@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net"
 )
 
 type MasterServer struct {
@@ -21,16 +22,12 @@ func NewMasterServer(args map[string]string) *MasterServer {
 	if !ok {
 		dbfile = ""
 	}
-	server := &MasterServer{Server: Server{role: "master", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: createReplicationID()}}
+	server := &MasterServer{Server: Server{role: "master", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: createReplicationID(), replicas: make(map[net.Conn]bool)}}
 	server.rdb = NewRDBManager(dir, dbfile, server)
 	fmt.Printf("Master Server created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server
 }
 
-func (m *MasterServer) AddReplica(addr string) {
-	m.replicas[addr] = true
-}
-
-func (m *MasterServer) GetReplicas() map[string]bool {
-	return m.replicas
-}
+// func (m *MasterServer) GetReplicas() map[string]bool {
+// 	return m.replicas
+// }

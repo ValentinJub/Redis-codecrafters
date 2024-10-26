@@ -22,8 +22,9 @@ type RedisServer interface {
 	// Encapsulates the request handling process
 	Listen()
 	// Add a slave to the server
-	AddReplica(addr string)
-	GetReplicas() map[string]bool
+	AddReplica(replica net.Conn)
+	Propagate(req *Request)
+	// GetReplicas() map[string]bool
 	SendRDBFile(conn net.Conn) error
 	RDBManager
 	Cache
@@ -43,15 +44,28 @@ type Server struct {
 	cache             Cache
 	replicationID     string
 	replicationOffset int
-	replicas          map[string]bool
+	replicas          map[net.Conn]bool
 }
 
-func (s *Server) AddReplica(addr string) {
-	return
+func (s *Server) AddReplica(r net.Conn) {
+	if s.role == "master" {
+		s.replicas[r] = true
+	}
 }
 
-func (s *Server) GetReplicas() map[string]bool {
-	return map[string]bool{}
+func (s *Server) GetReplicas() map[net.Conn]bool {
+	return s.replicas
+}
+
+func (s *Server) Propagate(req *Request) {
+	if s.role == "master" {
+		for replica := range s.replicas {
+			_, err := replica.Write(newBulkArray(append([]string{req.command}, req.args...)...))
+			if err != nil {
+				fmt.Printf("Error writing to replica: %s\n", err)
+			}
+		}
+	}
 }
 
 // Send an RDB file to a Replica
