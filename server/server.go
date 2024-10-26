@@ -3,23 +3,28 @@ package server
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
+	"strings"
+
+	utils "github.com/codecrafters-io/redis-starter-go/utils"
 )
 
 type RedisServer interface {
 	// Initialise the server creating a TCP listener
 	Init()
+	// Returns various information about the server
+	Info() map[string]string
 	// Listen for TCP connections using our TCP listener.
 	// Encapsulates the request handling process
 	Listen()
 	// Add a slave to the server
 	AddReplica(addr string)
 	GetReplicas() map[string]bool
-	// Returns various information about the server
-	Info() map[string]string
+	SendRDBFile(conn net.Conn) error
 	RDBManager
 	Cache
 }
@@ -47,6 +52,30 @@ func (s *Server) AddReplica(addr string) {
 
 func (s *Server) GetReplicas() map[string]bool {
 	return map[string]bool{}
+}
+
+// Send an RDB file to a Replica
+func (s *Server) SendRDBFile(conn net.Conn) error {
+	fmt.Printf("Sending RDB file to replica\n")
+	dir, dbfile := s.rdb.RDBInfo()
+	buffer, err := utils.ReadFile(dir + "/" + dbfile)
+	if err != nil {
+		fmt.Printf("Error reading RDB file: %s\n", err)
+		buffer.Reset()
+		// Craft an empty RDB file
+		data, err := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
+		if err != nil {
+			fmt.Printf("Error decoding hex string: %s\n", err)
+			return err
+		}
+		buffer.Write(data)
+	}
+	content := buffer.Bytes()
+	_, err = conn.Write(append([]byte(fmt.Sprintf("$%d\r\n", len(content))), content...))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Initialise the server, creating a listener
@@ -139,5 +168,7 @@ func GenerateRandomString(n int) (string, error) {
 
 	// Encode bytes to base64 and strip any non-alphanumeric characters if necessary
 	str := base64.URLEncoding.EncodeToString(bytes)
+	str = strings.ReplaceAll(str, "-", "1")
+	str = strings.ReplaceAll(str, "_", "2")
 	return str[:n], nil
 }

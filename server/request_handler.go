@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,11 +21,12 @@ type RequestHandler interface {
 
 type ReqHandler struct {
 	request []byte
+	conn    net.Conn
 	server  RedisServer
 }
 
-func NewRequestHandler(request []byte, s RedisServer) *ReqHandler {
-	return &ReqHandler{request: request, server: s}
+func NewRequestHandler(request []byte, s RedisServer, c net.Conn) *ReqHandler {
+	return &ReqHandler{request: request, server: s, conn: c}
 }
 
 // Handles a request and returns a response
@@ -57,6 +59,7 @@ func (r *ReqHandler) HandleRequest() []byte {
 	case "REPLCONF":
 		return r.replicationConfig(req)
 	case "PSYNC":
+		go r.server.SendRDBFile(r.conn)
 		return r.psync(req)
 	default:
 		return newSimpleString("Unknown command")

@@ -37,8 +37,9 @@ func (c *ConnHandler) HandleConnection() {
 		// The data read from the TCP stream
 		request := buff[:bytesRead]
 		// Handles the decoded request and produce an answer
-		reqHandler := NewRequestHandler(request, c.server)
+		reqHandler := NewRequestHandler(request, c.server, c.conn)
 		response := reqHandler.HandleRequest()
+
 		_, err = c.conn.Write(response)
 		if err != nil {
 			fmt.Println(err)
