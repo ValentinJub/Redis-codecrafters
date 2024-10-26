@@ -52,9 +52,21 @@ func (r *ReqHandler) HandleRequest() []byte {
 		return r.config(req)
 	case "KEYS":
 		return r.keys(req)
+	case "INFO":
+		return r.info(req)
 	default:
 		return newSimpleString("Unknown command")
 	}
+}
+
+func (r *ReqHandler) info(req *Request) []byte {
+	if len(req.args) < 1 {
+		return newSimpleString("Error: INFO command requires at least 1 argument")
+	}
+	arg := req.args[0]
+	header := newBulkString("# " + arg)
+	role := newBulkString(fmt.Sprintf("role:%s", r.server.role))
+	return append(header, role...)
 }
 
 func (r *ReqHandler) keys(req *Request) []byte {

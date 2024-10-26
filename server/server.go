@@ -15,6 +15,7 @@ type Server interface {
 }
 
 type MasterServer struct {
+	role     string
 	address  string
 	port     string
 	listener net.Listener
@@ -40,7 +41,7 @@ func NewMasterServer(args map[string]string) *MasterServer {
 	if !ok {
 		dbfile = ""
 	}
-	server := &MasterServer{address: SERVER_ADDR, port: port, cache: NewServerCache()}
+	server := &MasterServer{role: "master", address: SERVER_ADDR, port: port, cache: NewServerCache()}
 	server.rdb = NewRDBManager(dir, dbfile, server)
 	fmt.Printf("Server created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server
