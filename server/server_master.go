@@ -4,15 +4,18 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 )
 
 type MasterServer struct {
-	role     string
-	address  string
-	port     string
-	listener net.Listener
-	cache    Cache
-	rdb      RDBManager
+	role              string
+	address           string
+	port              string
+	listener          net.Listener
+	rdb               RDBManager
+	cache             Cache
+	replicationID     string
+	replicationOffset int
 }
 
 func NewMasterServer(args map[string]string) RedisServer {
@@ -28,7 +31,7 @@ func NewMasterServer(args map[string]string) RedisServer {
 	if !ok {
 		dbfile = ""
 	}
-	server := &MasterServer{role: "master", address: SERVER_ADDR, port: port, cache: NewServerCache()}
+	server := &MasterServer{role: "master", address: SERVER_ADDR, port: port, cache: NewServerCache(), replicationID: createReplicationID()}
 	server.rdb = NewRDBManager(dir, dbfile, server)
 	fmt.Printf("RedisServer created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server
@@ -46,9 +49,11 @@ func (s *MasterServer) Init() {
 
 func (s *MasterServer) Info() map[string]string {
 	return map[string]string{
-		"role":    s.role,
-		"address": s.address,
-		"port":    s.port,
+		"role":              s.role,
+		"address":           s.address,
+		"port":              s.port,
+		"replicationID":     s.replicationID,
+		"replicationOffset": strconv.Itoa(s.replicationOffset),
 	}
 }
 

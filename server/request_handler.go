@@ -67,8 +67,10 @@ func (r *ReqHandler) info(req *Request) []byte {
 	header := "# " + arg
 	infos := r.server.Info()
 	role := fmt.Sprintf("role:%s", infos["role"])
+	replID := fmt.Sprintf("%s_replid:%s", infos["role"], infos["replicationID"])
+	replOffset := fmt.Sprintf("%s_repl_offset:%s", infos["role"], infos["replicationOffset"])
 	return newBulkString(
-		header + "\n" + role + "\n",
+		header + "\n" + role + "\n" + replID + "\n" + replOffset + "\n",
 	)
 }
 
