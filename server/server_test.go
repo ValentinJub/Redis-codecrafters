@@ -132,7 +132,7 @@ var TestSetCases = []struct {
 	},
 }
 
-func StartMasterTestServer() *MasterServer {
+func StartMasterTestServer() RedisServer {
 	server := NewMasterServer(map[string]string{})
 	server.Init()
 	return server

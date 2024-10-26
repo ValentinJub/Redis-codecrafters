@@ -13,10 +13,10 @@ type ConnectionHandler interface {
 
 type ConnHandler struct {
 	conn   net.Conn
-	server *MasterServer
+	server RedisServer
 }
 
-func NewConnHandler(conn net.Conn, s *MasterServer) *ConnHandler {
+func NewConnHandler(conn net.Conn, s RedisServer) *ConnHandler {
 	return &ConnHandler{conn: conn, server: s}
 }
 

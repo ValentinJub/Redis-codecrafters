@@ -20,10 +20,10 @@ type RequestHandler interface {
 
 type ReqHandler struct {
 	request []byte
-	server  *MasterServer
+	server  RedisServer
 }
 
-func NewRequestHandler(request []byte, s *MasterServer) *ReqHandler {
+func NewRequestHandler(request []byte, s RedisServer) *ReqHandler {
 	return &ReqHandler{request: request, server: s}
 }
 
@@ -65,7 +65,8 @@ func (r *ReqHandler) info(req *Request) []byte {
 	}
 	arg := req.args[0]
 	header := "# " + arg
-	role := fmt.Sprintf("role:%s", r.server.role)
+	infos := r.server.Info()
+	role := fmt.Sprintf("role:%s", infos["role"])
 	return newBulkString(
 		header + "\n" + role + "\n",
 	)
@@ -73,7 +74,7 @@ func (r *ReqHandler) info(req *Request) []byte {
 
 func (r *ReqHandler) keys(req *Request) []byte {
 	// Dangerous, need to make sure args[0] is not empty and that no more keys follow
-	keys := r.server.cache.Keys(req.args[0])
+	keys := r.server.Keys(req.args[0])
 	return newBulkArray(keys...)
 }
 
@@ -87,12 +88,11 @@ func (r *ReqHandler) config(req *Request) []byte {
 }
 
 func (r *ReqHandler) configGet(key string) []byte {
+	dir, fn := r.server.RDBInfo()
 	switch key {
 	case "dir":
-		dir, _ := r.server.rdb.Info()
 		return newBulkArray("dir", dir)
 	case "dbfilename":
-		_, fn := r.server.rdb.Info()
 		return newBulkArray("dbfilename", fn)
 	default:
 		return newBulkString("")
@@ -166,17 +166,17 @@ func (r *ReqHandler) set(req *Request) []byte {
 		return newSimpleString(fmt.Sprintf("Error: %s", err))
 	}
 	if args.nx {
-		if _, ok := r.server.cache.Get(req.args[0]); ok == nil {
+		if _, ok := r.server.Get(req.args[0]); ok == nil {
 			return newBulkString("")
 		}
 	} else if args.xx {
-		if _, ok := r.server.cache.Get(req.args[0]); ok != nil {
+		if _, ok := r.server.Get(req.args[0]); ok != nil {
 			return newSimpleString("")
 		}
 	}
-	r.server.cache.Set(req.args[0], req.args[1])
+	r.server.Set(req.args[0], req.args[1])
 	if args.expiry > 0 {
-		r.server.cache.ExpireIn(req.args[0], uint64(args.expiry))
+		r.server.ExpireIn(req.args[0], uint64(args.expiry))
 	}
 
 	return newSimpleString("OK")
@@ -186,6 +186,6 @@ func (r *ReqHandler) get(req *Request) []byte {
 	if len(req.args) < 1 {
 		return newSimpleString("Error: GET command requires at least 1 argument")
 	}
-	v, _ := r.server.cache.Get(req.args[0])
+	v, _ := r.server.Get(req.args[0])
 	return newBulkString(v)
 }

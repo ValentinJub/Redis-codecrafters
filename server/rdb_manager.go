@@ -16,21 +16,21 @@ const (
 // Defines the actions to perfom on the RDB file
 type RDBManager interface {
 	// Returns the directory and file name of the RDB file
-	Info() (string, string)
+	RDBInfo() (string, string)
 	LoadRDBToCache() error
 }
 
 type RDBmanager struct {
 	dir    string
 	dbfile string
-	server *MasterServer
+	server RedisServer
 }
 
-func NewRDBManager(dir, dbfile string, s *MasterServer) *RDBmanager {
+func NewRDBManager(dir, dbfile string, s RedisServer) *RDBmanager {
 	return &RDBmanager{dir: dir, dbfile: dbfile, server: s}
 }
 
-func (r *RDBmanager) Info() (string, string) {
+func (r *RDBmanager) RDBInfo() (string, string) {
 	return r.dir, r.dbfile
 }
 
@@ -54,12 +54,12 @@ func (r *RDBmanager) LoadRDBToCache() error {
 				fmt.Printf("key %s has expired - not loading it to cache\n", k)
 				continue
 			}
-			err := r.server.cache.SetExpiry(k, v.value, v.expiry)
+			err := r.server.SetExpiry(k, v.value, v.expiry)
 			if err != nil {
 				fmt.Printf("error while setting key %s with expiry:%d - error: %s\n", k, v.expiry, err)
 			}
 		} else {
-			err := r.server.cache.Set(k, v.value)
+			err := r.server.Set(k, v.value)
 			if err != nil {
 				fmt.Printf("error while setting key %s: %s\n", k, err)
 			}

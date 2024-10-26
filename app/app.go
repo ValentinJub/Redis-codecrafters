@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/server"
 )
@@ -13,7 +14,8 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	server := server.NewMasterServer(args)
+	serverManager := server.NewServerManager(args)
+	server := serverManager.SpwanServer()
 	server.LoadRDBToCache()
 	server.Init()
 	server.Listen()
@@ -43,6 +45,14 @@ func parseOsArgs(args []string) (map[string]string, error) {
 				fmt.Printf("port: %s\n", args[x+1])
 			} else {
 				return nil, fmt.Errorf("missing argument for --port")
+			}
+		case "--replicaof":
+			if x+1 < len(args) {
+				parts := strings.Join(strings.Split(args[x+1], " "), ":")
+				argsMap[arg] = parts
+				fmt.Printf("replicaof: %s\n", parts)
+			} else {
+				return nil, fmt.Errorf("missing argument for --replicaof")
 			}
 		default:
 		}
