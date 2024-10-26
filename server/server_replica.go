@@ -50,7 +50,47 @@ func (r *ReplicaServer) SyncWithMaster() {
 		os.Exit(1)
 	}
 	defer conn.Close()
+	r.doHandshake(conn)
+}
 
+func (r *ReplicaServer) doHandshake(conn net.Conn) {
 	// Send the PING command
 	conn.Write(newBulkArray("PING"))
+
+	// Read the response
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		fmt.Println("Error reading from master: ", err.Error())
+		os.Exit(1)
+	}
+	fmt.Printf("Received response from master: %s\n", buf[:n])
+	if string(buf[:n]) != "+PONG"+CRLF {
+		fmt.Println("Error syncing with master")
+		os.Exit(1)
+	}
+
+	// Send the REPLCONF commands
+	conn.Write(newBulkArray("REPLCONF", "listening-port", r.port))
+	n, err = conn.Read(buf)
+	if err != nil {
+		fmt.Println("Error reading from master: ", err.Error())
+		os.Exit(1)
+	}
+	fmt.Printf("Received response from master: %s\n", buf[:n])
+	if string(buf[:n]) != "+OK"+CRLF {
+		fmt.Println("Error syncing with master")
+		os.Exit(1)
+	}
+	conn.Write(newBulkArray("REPLCONF", "capa", "psync2"))
+	n, err = conn.Read(buf)
+	if err != nil {
+		fmt.Println("Error reading from master: ", err.Error())
+		os.Exit(1)
+	}
+	fmt.Printf("Received response from master: %s\n", buf[:n])
+	if string(buf[:n]) != "+OK"+CRLF {
+		fmt.Println("Error syncing with master")
+		os.Exit(1)
+	}
 }

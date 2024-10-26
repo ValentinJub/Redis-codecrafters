@@ -17,9 +17,6 @@ func main() {
 	serverManager := server.NewServerManager(args)
 	server := serverManager.SpwanServer()
 	server.LoadRDBToCache()
-	// if server.Info()["role"] == "slave" {
-	// 	serverManager.SyncWithMaster()
-	// }
 	server.Init()
 	server.Listen()
 }
