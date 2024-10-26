@@ -2,20 +2,10 @@ package server
 
 import (
 	"fmt"
-	"net"
-	"os"
-	"strconv"
 )
 
 type MasterServer struct {
-	role              string
-	address           string
-	port              string
-	listener          net.Listener
-	rdb               RDBManager
-	cache             Cache
-	replicationID     string
-	replicationOffset int
+	Server
 }
 
 func NewMasterServer(args map[string]string) RedisServer {
@@ -31,77 +21,8 @@ func NewMasterServer(args map[string]string) RedisServer {
 	if !ok {
 		dbfile = ""
 	}
-	server := &MasterServer{role: "master", address: SERVER_ADDR, port: port, cache: NewServerCache(), replicationID: createReplicationID()}
+	server := &MasterServer{Server: Server{role: "master", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: createReplicationID()}}
 	server.rdb = NewRDBManager(dir, dbfile, server)
 	fmt.Printf("RedisServer created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server
-}
-
-// Initialise the server, creating a listener
-func (s *MasterServer) Init() {
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%s", s.address, s.port))
-	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
-		os.Exit(1)
-	}
-	s.listener = l
-}
-
-func (s *MasterServer) Info() map[string]string {
-	return map[string]string{
-		"role":              s.role,
-		"address":           s.address,
-		"port":              s.port,
-		"replicationID":     s.replicationID,
-		"replicationOffset": strconv.Itoa(s.replicationOffset),
-	}
-}
-
-// Event loop, handles requests inside it
-func (s *MasterServer) Listen() {
-	for {
-		conn, err := s.listener.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			os.Exit(1)
-		}
-		connHandler := NewConnHandler(conn, s)
-		go connHandler.HandleConnection()
-	}
-}
-
-// Implement the RDBManager interface
-
-func (s *MasterServer) RDBInfo() (string, string) {
-	return s.rdb.RDBInfo()
-}
-
-func (s *MasterServer) LoadRDBToCache() error {
-	return s.rdb.LoadRDBToCache()
-}
-
-// Implement the Cache interface
-
-func (s *MasterServer) Set(key, value string) error {
-	return s.cache.Set(key, value)
-}
-
-func (s *MasterServer) SetExpiry(key, value string, expiry uint64) error {
-	return s.cache.SetExpiry(key, value, expiry)
-}
-
-func (s *MasterServer) Get(key string) (string, error) {
-	return s.cache.Get(key)
-}
-
-func (s *MasterServer) Keys(key string) []string {
-	return s.cache.Keys(key)
-}
-
-func (s *MasterServer) ExpireIn(key string, milliseconds uint64) error {
-	return s.cache.ExpireIn(key, milliseconds)
-}
-
-func (s *MasterServer) IsExpired(key string) bool {
-	return s.cache.IsExpired(key)
 }

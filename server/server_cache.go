@@ -16,7 +16,7 @@ type Cache interface {
 	IsExpired(key string) bool
 }
 
-type ServerCache struct {
+type CacheImpl struct {
 	cache map[string]Object
 }
 
@@ -25,21 +25,21 @@ type Object struct {
 	expiry uint64
 }
 
-func NewServerCache() *ServerCache {
-	return &ServerCache{cache: make(map[string]Object)}
+func NewCache() *CacheImpl {
+	return &CacheImpl{cache: make(map[string]Object)}
 }
 
-func (s *ServerCache) Set(key string, value string) error {
+func (s *CacheImpl) Set(key string, value string) error {
 	s.cache[key] = Object{value: value}
 	return nil
 }
 
-func (s *ServerCache) SetExpiry(key string, value string, expiry uint64) error {
+func (s *CacheImpl) SetExpiry(key string, value string, expiry uint64) error {
 	s.cache[key] = Object{value: value, expiry: expiry}
 	return nil
 }
 
-func (s *ServerCache) Get(key string) (string, error) {
+func (s *CacheImpl) Get(key string) (string, error) {
 	if v, ok := s.cache[key]; ok {
 		if s.IsExpired(key) {
 			return "", fmt.Errorf("key expired")
@@ -50,7 +50,7 @@ func (s *ServerCache) Get(key string) (string, error) {
 	}
 }
 
-func (s *ServerCache) Keys(key string) []string {
+func (s *CacheImpl) Keys(key string) []string {
 	keys := make([]string, 0)
 	keyRegexp := parseKey(key)
 	fmt.Printf("keyRegexp: %s\n", keyRegexp.String())
@@ -83,7 +83,7 @@ func parseKey(key string) *regexp.Regexp {
 }
 
 // ExpireIn sets the expiry time of a key in milliseconds from now
-func (s *ServerCache) ExpireIn(key string, milliseconds uint64) error {
+func (s *CacheImpl) ExpireIn(key string, milliseconds uint64) error {
 	if v, ok := s.cache[key]; !ok {
 		return fmt.Errorf("key not found")
 	} else {
@@ -94,7 +94,7 @@ func (s *ServerCache) ExpireIn(key string, milliseconds uint64) error {
 	}
 }
 
-func (s *ServerCache) IsExpired(key string) bool {
+func (s *CacheImpl) IsExpired(key string) bool {
 	if v, ok := s.cache[key]; ok {
 		if v.expiry != 0 {
 			now := time.Now().UnixMilli()

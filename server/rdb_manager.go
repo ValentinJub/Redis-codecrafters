@@ -20,22 +20,22 @@ type RDBManager interface {
 	LoadRDBToCache() error
 }
 
-type RDBmanager struct {
+type RDBManagerImpl struct {
 	dir    string
 	dbfile string
 	server RedisServer
 }
 
-func NewRDBManager(dir, dbfile string, s RedisServer) *RDBmanager {
-	return &RDBmanager{dir: dir, dbfile: dbfile, server: s}
+func NewRDBManager(dir, dbfile string, s RedisServer) *RDBManagerImpl {
+	return &RDBManagerImpl{dir: dir, dbfile: dbfile, server: s}
 }
 
-func (r *RDBmanager) RDBInfo() (string, string) {
+func (r *RDBManagerImpl) RDBInfo() (string, string) {
 	return r.dir, r.dbfile
 }
 
 // Open the RDB file and load the data into the cache
-func (r *RDBmanager) LoadRDBToCache() error {
+func (r *RDBManagerImpl) LoadRDBToCache() error {
 	buffer, err := utils.ReadFile(r.dir + "/" + r.dbfile)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (r *RDBmanager) LoadRDBToCache() error {
 }
 
 // Decode the RDB data and return a map of keys-values, with an expiry if any
-func (r *RDBmanager) decodeRDB(data []byte) (map[string]Object, error) {
+func (r *RDBManagerImpl) decodeRDB(data []byte) (map[string]Object, error) {
 	d := NewRDBDecoder(data)
 	result, err := d.Decode()
 	if err != nil {
