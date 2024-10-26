@@ -5,7 +5,9 @@ type ServerManager interface {
 }
 
 type ServerManagerImpl struct {
-	args map[string]string
+	args    map[string]string
+	master  *MasterServer
+	replica *ReplicaServer
 }
 
 func NewServerManager(args map[string]string) ServerManager {
@@ -14,7 +16,9 @@ func NewServerManager(args map[string]string) ServerManager {
 
 func (s *ServerManagerImpl) SpwanServer() RedisServer {
 	if _, ok := s.args["--replicaof"]; ok {
-		return NewReplicaServer(s.args)
+		s.replica = NewReplicaServer(s.args)
+		return s.replica
 	}
-	return NewMasterServer(s.args)
+	s.master = NewMasterServer(s.args)
+	return s.master
 }

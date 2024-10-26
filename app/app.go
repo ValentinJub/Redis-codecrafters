@@ -17,6 +17,9 @@ func main() {
 	serverManager := server.NewServerManager(args)
 	server := serverManager.SpwanServer()
 	server.LoadRDBToCache()
+	// if server.Info()["role"] == "slave" {
+	// 	serverManager.SyncWithMaster()
+	// }
 	server.Init()
 	server.Listen()
 }
@@ -48,9 +51,12 @@ func parseOsArgs(args []string) (map[string]string, error) {
 			}
 		case "--replicaof":
 			if x+1 < len(args) {
-				parts := strings.Join(strings.Split(args[x+1], " "), ":")
-				argsMap[arg] = parts
-				fmt.Printf("replicaof: %s\n", parts)
+				parts := strings.Split(args[x+1], " ")
+				if parts[0] == "localhost" {
+					parts[0] = "127.0.0.1"
+				}
+				argsMap[arg] = strings.Join(parts, ":")
+				fmt.Printf("replicaof: %s\n", argsMap[arg])
 			} else {
 				return nil, fmt.Errorf("missing argument for --replicaof")
 			}

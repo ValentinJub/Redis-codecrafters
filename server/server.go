@@ -41,7 +41,7 @@ type Server struct {
 func (s *Server) Init() {
 	l, err := net.Listen("tcp", fmt.Sprintf("%s:%s", s.address, s.port))
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
+		fmt.Printf("Failed to bind to port %s\n", s.port)
 		os.Exit(1)
 	}
 	s.listener = l
