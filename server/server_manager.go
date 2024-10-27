@@ -6,8 +6,8 @@ type ServerManager interface {
 
 type ServerManagerImpl struct {
 	args    map[string]string
-	master  *MasterServer
-	replica *ReplicaServer
+	master  MasterServer
+	replica ReplicaServer
 }
 
 func NewServerManager(args map[string]string) ServerManager {

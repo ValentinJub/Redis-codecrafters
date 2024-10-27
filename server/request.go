@@ -1,9 +1,34 @@
 package server
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
+
+type RequestDecoder struct {
+	data   []string
+	cursor int
+}
+
+func NewRequestDecoder(data []string) *RequestDecoder {
+	return &RequestDecoder{data: data, cursor: 0}
+}
+
+func (r *RequestDecoder) Decode() ([]Request, error) {
+	requests := make([]Request, 0)
+	for r.cursor < len(r.data)-1 {
+		req := NewRequest(r.data[r.cursor:])
+		err := req.Decode()
+		if err != nil {
+			return nil, err
+		}
+		requests = append(requests, *req)
+		// Args and their length + command and its length + parts number
+		r.cursor += (len(req.args) * 2) + 2 + 1
+	}
+	return requests, nil
+}
 
 type Request struct {
 	data    []string
@@ -16,7 +41,7 @@ func NewRequest(data []string) *Request {
 }
 
 func (r *Request) Decode() error {
-	// fmt.Printf("About to decode: %v\n", r.data)
+	fmt.Printf("About to decode: %v\n", r.data)
 	partsNumber, err := strconv.Atoi(r.data[0][1:])
 	if err != nil {
 		return err

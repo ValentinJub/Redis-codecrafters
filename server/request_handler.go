@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,18 +18,16 @@ type RequestHandler interface {
 	HandleRequest() []byte
 }
 
-type ReqHandler struct {
+type ReqHandlerImpl struct {
 	request []byte
-	conn    net.Conn
-	server  RedisServer
 }
 
-func NewRequestHandler(request []byte, s RedisServer, c net.Conn) *ReqHandler {
-	return &ReqHandler{request: request, server: s, conn: c}
+func NewRequestHandler(request []byte) *ReqHandlerImpl {
+	return &ReqHandlerImpl{request: request}
 }
 
 // Handles a request and returns a response
-func (r *ReqHandler) HandleRequest() []byte {
+func (r *ReqHandlerImpl) HandleRequest() []byte {
 	// The request can be stringifyied
 	re := strings.Split(string(r.request), CRLF)
 	fmt.Printf("Client request: %v\n", re)
@@ -46,108 +43,19 @@ func (r *ReqHandler) HandleRequest() []byte {
 		return r.ping(req)
 	case "ECHO":
 		return r.echo(req)
-	case "SET":
-		resp, err := r.set(req)
-		if err != nil {
-			return newSimpleString("Error: " + err.Error())
-		}
-		go r.server.Propagate(req)
-		return resp
-	case "GET":
-		return r.get(req)
-	case "CONFIG":
-		return r.config(req)
-	case "KEYS":
-		return r.keys(req)
-	case "INFO":
-		return r.info(req)
-	case "REPLCONF":
-		return r.replicationConfig(req)
-	case "PSYNC":
-		go r.server.SendRDBFile(r.conn)
-		return r.psync(req)
 	default:
 		return newSimpleString("Unknown command")
 	}
 }
 
-func (r *ReqHandler) replicationConfig(req *Request) []byte {
-	infos := r.server.Info()
-	if infos["role"] != "master" {
-		return newSimpleString("Error: REPLCONF command can only be run on a master")
-	}
-	if len(req.args) < 2 {
-		return newSimpleString("Error: REPLCONF command requires at least 2 arguments")
-	}
-	for _, arg := range req.args {
-		if arg == "listening-port" {
-			r.server.AddReplica(r.conn)
-		}
-	}
-	return newSimpleString("OK")
-}
-
-func (r *ReqHandler) psync(req *Request) []byte {
-	if len(req.args) < 2 {
-		return newSimpleString("Error: PSYNC command requires at least 2 arguments")
-	}
-	infos := r.server.Info()
-	if infos["role"] == "slave" {
-		return newSimpleString("Error: PSYNC command can only be run on a master")
-	}
-	return newBulkString("+FULLRESYNC " + infos["replicationID"] + " 0")
-}
-
-func (r *ReqHandler) info(req *Request) []byte {
-	if len(req.args) < 1 {
-		return newSimpleString("Error: INFO command requires at least 1 argument")
-	}
-	arg := req.args[0]
-	header := "# " + arg
-	infos := r.server.Info()
-	role := fmt.Sprintf("role:%s", infos["role"])
-	replID := fmt.Sprintf("%s_replid:%s", infos["role"], infos["replicationID"])
-	replOffset := fmt.Sprintf("%s_repl_offset:%s", infos["role"], infos["replicationOffset"])
-	return newBulkString(
-		header + "\n" + role + "\n" + replID + "\n" + replOffset + "\n",
-	)
-}
-
-func (r *ReqHandler) keys(req *Request) []byte {
-	// Dangerous, need to make sure args[0] is not empty and that no more keys follow
-	keys := r.server.Keys(req.args[0])
-	return newBulkArray(keys...)
-}
-
-func (r *ReqHandler) config(req *Request) []byte {
-	if len(req.args) < 1 {
-		return newSimpleString("Error: CONFIG command requires at least 1 argument (GET or SET)")
-	} else if req.args[0] == "GET" {
-		return r.configGet(req.args[1])
-	}
-	return []byte{0}
-}
-
-func (r *ReqHandler) configGet(key string) []byte {
-	dir, fn := r.server.RDBInfo()
-	switch key {
-	case "dir":
-		return newBulkArray("dir", dir)
-	case "dbfilename":
-		return newBulkArray("dbfilename", fn)
-	default:
-		return newBulkString("")
-	}
-}
-
-func (r *ReqHandler) ping(req *Request) []byte {
+func (r *ReqHandlerImpl) ping(req *Request) []byte {
 	if len(req.args) > 0 {
 		return newBulkString(strings.Join(req.args, " "))
 	}
 	return newSimpleString("PONG")
 }
 
-func (r *ReqHandler) echo(req *Request) []byte {
+func (r *ReqHandlerImpl) echo(req *Request) []byte {
 	return newBulkString(strings.Join(req.args, " "))
 }
 
@@ -158,7 +66,7 @@ type SetArgs struct {
 }
 
 // Extracts the SET command arguments
-func extractSetArgs(args []string) (SetArgs, error) {
+func (r *ReqHandlerImpl) ExtractSetArgs(args []string) (SetArgs, error) {
 	var setArgs SetArgs
 	expireSet := false
 	for i := 0; i < len(args); i++ {
@@ -196,37 +104,4 @@ func extractSetArgs(args []string) (SetArgs, error) {
 
 	}
 	return setArgs, nil
-}
-
-func (r *ReqHandler) set(req *Request) ([]byte, error) {
-	if len(req.args) < 2 {
-		return newSimpleString("error"), fmt.Errorf("Error: SET command requires at least 2 arguments")
-	}
-	args, err := extractSetArgs(req.args)
-	if err != nil {
-		return newSimpleString("error"), fmt.Errorf("Error: while extracting set args")
-	}
-	if args.nx {
-		if _, ok := r.server.Get(req.args[0]); ok == nil {
-			return newBulkString(""), fmt.Errorf("Error: key already exists")
-		}
-	} else if args.xx {
-		if _, ok := r.server.Get(req.args[0]); ok != nil {
-			return newSimpleString(""), fmt.Errorf("Error: key does not exist")
-		}
-	}
-	r.server.Set(req.args[0], req.args[1])
-	if args.expiry > 0 {
-		r.server.ExpireIn(req.args[0], uint64(args.expiry))
-	}
-
-	return newSimpleString("OK"), nil
-}
-
-func (r *ReqHandler) get(req *Request) []byte {
-	if len(req.args) < 1 {
-		return newSimpleString("Error: GET command requires at least 1 argument")
-	}
-	v, _ := r.server.Get(req.args[0])
-	return newBulkString(v)
 }
