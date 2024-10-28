@@ -16,6 +16,7 @@ type RedisServer interface {
 	// Encapsulates the request handling process
 	Listen()
 	HandleConnection(conn net.Conn)
+	AddAckOffset(offset int)
 	GetAckOffset() int
 	RDBManager
 	Cache
@@ -35,6 +36,10 @@ type RedisServerImpl struct {
 	cache             Cache
 	replicationID     string
 	replicationOffset int
+}
+
+func (s *RedisServerImpl) AddAckOffset(offset int) {
+	s.replicationOffset += offset
 }
 
 // Initialise the server, creating a listener
