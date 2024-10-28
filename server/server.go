@@ -16,6 +16,7 @@ type RedisServer interface {
 	// Encapsulates the request handling process
 	Listen()
 	HandleConnection(conn net.Conn)
+	GetAckOffset() int
 	RDBManager
 	Cache
 }
@@ -54,6 +55,10 @@ func (s *RedisServerImpl) Info() map[string]string {
 		"replicationID":     s.replicationID,
 		"replicationOffset": strconv.Itoa(s.replicationOffset),
 	}
+}
+
+func (s *RedisServerImpl) GetAckOffset() int {
+	return s.replicationOffset
 }
 
 // Implement the RDBManager interface

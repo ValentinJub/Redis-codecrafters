@@ -6,14 +6,19 @@ import (
 	"io"
 	"net"
 	"os"
+	"reflect"
+	"strconv"
+	"strings"
 
 	utils "github.com/codecrafters-io/redis-starter-go/utils"
 )
 
 type ReplicaServer interface {
 	RedisServer
-	SyncWithMaster()
 	HandleMasterConnection()
+	SyncWithMaster()
+	SendToMaster(data []byte) error
+	ReadFromMaster() ([]byte, error)
 }
 
 type ReplicaServerImpl struct {
@@ -44,6 +49,21 @@ func NewReplicaServer(args map[string]string) *ReplicaServerImpl {
 	server.rdb = NewRDBManager(dir, dbfile, server)
 	fmt.Printf("Slave RedisServerImpl created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server
+}
+
+func (r *ReplicaServerImpl) SendToMaster(data []byte) error {
+	_, err := r.masterConn.Write(data)
+	return err
+}
+
+func (r *ReplicaServerImpl) ReadFromMaster() ([]byte, error) {
+	buf := make([]byte, 1024)
+	n, err := r.masterConn.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("Received data from master: %s\n", buf[:n])
+	return buf[:n], nil
 }
 
 // Override the Init method to allow the replica to sync with the master
@@ -135,63 +155,143 @@ func (r *ReplicaServerImpl) HandleMasterConnection() {
 }
 
 func (r *ReplicaServerImpl) doHandshake() error {
+
+	expect := func(got, want []byte) bool {
+		if !reflect.DeepEqual(got, want) {
+			fmt.Printf("Expected '%s' but got '%s'\n", want, got)
+			return false
+		}
+		return true
+	}
+
 	// Send the PING command
-	r.masterConn.Write(newBulkArray("PING"))
+	r.SendToMaster(newBulkArray("PING"))
 
 	// Read the response
-	buf := make([]byte, 1024)
-	n, err := r.masterConn.Read(buf)
+	resp, err := r.ReadFromMaster()
 	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
+		fmt.Println("Error reading from master during handshake PING: ", err.Error())
 		os.Exit(1)
 	}
-	fmt.Printf("Received response from master: %s\n", buf[:n])
-	if string(buf[:n]) != "+PONG"+CRLF {
+	if !expect(resp, newSimpleString("PONG")) {
 		fmt.Println("Error syncing with master")
 		os.Exit(1)
 	}
 
-	// Send the REPLCONF commands
-	r.masterConn.Write(newBulkArray("REPLCONF", "listening-port", r.port))
-	n, err = r.masterConn.Read(buf)
+	// Send the 1st REPLCONF commands
+	r.SendToMaster(newBulkArray("REPLCONF", "listening-port", r.port))
+
+	// Read the response
+	resp, err = r.ReadFromMaster()
 	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
+		fmt.Println("Error reading from master during handshake 1st REPLCONF: ", err.Error())
 		os.Exit(1)
 	}
-	fmt.Printf("Received response from master: %s\n", buf[:n])
-	if string(buf[:n]) != "+OK"+CRLF {
+	if !expect(resp, newSimpleString("OK")) {
 		fmt.Println("Error syncing with master")
 		os.Exit(1)
 	}
-	r.masterConn.Write(newBulkArray("REPLCONF", "capa", "psync2"))
-	n, err = r.masterConn.Read(buf)
+
+	// Send the 2nd REPLCONF commands
+	r.SendToMaster(newBulkArray("REPLCONF", "capa", "psync2"))
+
+	// Read the response
+	resp, err = r.ReadFromMaster()
 	if err != nil {
-		fmt.Println("Error reading from master: ", err.Error())
+		fmt.Println("Error reading from master during handshake 2nd REPLCONF: ", err.Error())
 		os.Exit(1)
 	}
-	fmt.Printf("Received response from master: %s\n", buf[:n])
-	if string(buf[:n]) != "+OK"+CRLF {
+	if !expect(resp, newSimpleString("OK")) {
 		fmt.Println("Error syncing with master")
 		os.Exit(1)
 	}
 
 	// Send the PSYNC command
-	r.masterConn.Write(newBulkArray("PSYNC", "?", "-1"))
-	n, err = r.masterConn.Read(buf)
+	r.SendToMaster(newBulkArray("PSYNC", "?", "-1"))
+	r.handlePostHandshakeData()
+	return nil
+}
+
+func (r *ReplicaServerImpl) handlePostHandshakeData() error {
+	// Read the response
+	resp, err := r.ReadFromMaster()
 	if err != nil {
 		fmt.Println("Error reading from master: ", err.Error())
 		os.Exit(1)
 	}
-	fmt.Printf("Received response from master: %s\n", buf[:n])
-	// if string(buf[:n]) != "+FULLRESYNC"+CRLF {
-	// 	fmt.Println("Error syncing with master")
-	// 	os.Exit(1)
-	// }
-	// n, err = r.masterConn.Read(buf)
-	// if err != nil {
-	// 	fmt.Println("Error reading from master: ", err.Error())
-	// 	os.Exit(1)
-	// }
-	fmt.Printf("Received response from master: %s\n", buf[:n])
+
+	// Decipher the response. It can be a mix of FULLRESYNC and the RDB and one or more commands
+	// We will need to decipher it like a stream of bytes whether we have handled the RDB or not
+	data := resp
+	cursor := 0
+	// Our goal is to find the end bound of the FULLRESYNC message which ends with \n
+	for i := 0; i < len(data); i++ {
+		if data[i] == '\n' {
+			cursor = i
+			fmt.Printf("FULLRESYNC: '%s'\n", data[:cursor])
+			break
+		}
+	}
+
+	// Set the replicationID and the offset
+	parts := strings.Split(string(data[:cursor]), " ")
+	r.replicationID = parts[1]
+
+	fmt.Printf("Replication ID set: %s\n", r.replicationID)
+
+	// The RDB wasn't sent with the FULLRESYNC message, attempt to read it
+	if cursor+1 == len(data) {
+		buf := make([]byte, 1024)
+		n, err := r.masterConn.Read(buf)
+		if err != nil {
+			fmt.Println("Error reading from master: ", err.Error())
+			os.Exit(1)
+		}
+		fmt.Printf("Received response from master: %s\n", buf[:n])
+		data = buf[:n]
+		cursor = 0
+		// The RDB file isn't received yet
+		if len(data) == 0 {
+			fmt.Println("No data received")
+			return nil
+		}
+	} else {
+		cursor++
+	}
+
+	// We need to handle the RDB
+	lenToignore := 0
+	// The RDB length is prefixed with a '$' character, grab the length and ignore the RDB
+	if data[cursor] == '$' {
+		str := ""
+		for i := cursor + 1; i < len(data); i++ {
+			if data[i] != '\r' {
+				str += string(data[i])
+			} else {
+				cursor = i
+				break
+			}
+		}
+		lenToignore, err = strconv.Atoi(str)
+		if err != nil {
+			fmt.Println("Error converting RDB length: ", err)
+			return nil
+		}
+	} else {
+		fmt.Printf("Unexpected character: '%c'\n", data[cursor])
+		return nil
+	}
+
+	// Ignore the RDB
+	cursor += lenToignore + 2
+	if cursor >= len(data) {
+		fmt.Printf("RDB ignored and end of data\n")
+		return nil
+	}
+
+	// Handle the rest of the data
+	fmt.Printf("Data remaining: %s\n", data[cursor:])
+	reqH := NewReqHandlerMasterReplica(data[cursor:], r)
+	go reqH.HandleRequest()
 	return nil
 }

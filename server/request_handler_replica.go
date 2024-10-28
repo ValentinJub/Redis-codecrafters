@@ -5,17 +5,17 @@ import (
 	"strings"
 )
 
-type ReqHanderReplica struct {
+type ReqHandlerReplica struct {
 	ReqHandlerImpl
 	replica ReplicaServer
 }
 
-func NewReqHandlerReplica(request []byte, s ReplicaServer) *ReqHanderReplica {
-	return &ReqHanderReplica{ReqHandlerImpl: ReqHandlerImpl{request: request}, replica: s}
+func NewReqHandlerReplica(request []byte, s ReplicaServer) *ReqHandlerReplica {
+	return &ReqHandlerReplica{ReqHandlerImpl: ReqHandlerImpl{request: request}, replica: s}
 }
 
 // Handles a request and returns a response
-func (r *ReqHanderReplica) HandleRequest() []byte {
+func (r *ReqHandlerReplica) HandleRequest() []byte {
 	re := strings.Split(string(r.request), CRLF)
 	fmt.Printf("Client request: %v\n", re)
 	reqD := NewRequestDecoder(re)
@@ -52,7 +52,7 @@ func (r *ReqHanderReplica) HandleRequest() []byte {
 	return []byte{}
 }
 
-func (r *ReqHanderReplica) info(req *Request) []byte {
+func (r *ReqHandlerReplica) info(req *Request) []byte {
 	if len(req.args) < 1 {
 		return newSimpleString("Error: INFO command requires at least 1 argument")
 	}
@@ -67,13 +67,13 @@ func (r *ReqHanderReplica) info(req *Request) []byte {
 	)
 }
 
-func (r *ReqHanderReplica) keys(req *Request) []byte {
+func (r *ReqHandlerReplica) keys(req *Request) []byte {
 	// Dangerous, need to make sure args[0] is not empty and that no more keys follow
 	keys := r.replica.Keys(req.args[0])
 	return newBulkArray(keys...)
 }
 
-func (r *ReqHanderReplica) config(req *Request) []byte {
+func (r *ReqHandlerReplica) config(req *Request) []byte {
 	if len(req.args) < 1 {
 		return newSimpleString("Error: CONFIG command requires at least 1 argument (GET or SET)")
 	} else if req.args[0] == "GET" {
@@ -82,7 +82,7 @@ func (r *ReqHanderReplica) config(req *Request) []byte {
 	return []byte{0}
 }
 
-func (r *ReqHanderReplica) configGet(key string) []byte {
+func (r *ReqHandlerReplica) configGet(key string) []byte {
 	dir, fn := r.replica.RDBInfo()
 	switch key {
 	case "dir":
@@ -94,18 +94,18 @@ func (r *ReqHanderReplica) configGet(key string) []byte {
 	}
 }
 
-func (r *ReqHanderReplica) ping(req *Request) []byte {
+func (r *ReqHandlerReplica) ping(req *Request) []byte {
 	if len(req.args) > 0 {
 		return newBulkString(strings.Join(req.args, " "))
 	}
 	return newSimpleString("PONG")
 }
 
-func (r *ReqHanderReplica) echo(req *Request) []byte {
+func (r *ReqHandlerReplica) echo(req *Request) []byte {
 	return newBulkString(strings.Join(req.args, " "))
 }
 
-func (r *ReqHanderReplica) set(req *Request) ([]byte, error) {
+func (r *ReqHandlerReplica) set(req *Request) ([]byte, error) {
 	if len(req.args) < 2 {
 		return newSimpleString("error"), fmt.Errorf("error: SET command requires at least 2 arguments")
 	}
@@ -130,7 +130,7 @@ func (r *ReqHanderReplica) set(req *Request) ([]byte, error) {
 	return newSimpleString("OK"), nil
 }
 
-func (r *ReqHanderReplica) get(req *Request) []byte {
+func (r *ReqHandlerReplica) get(req *Request) []byte {
 	if len(req.args) < 1 {
 		return newSimpleString("Error: GET command requires at least 1 argument")
 	}

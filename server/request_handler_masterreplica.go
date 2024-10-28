@@ -2,15 +2,16 @@ package server
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
 type ReqHanderMasterReplica struct {
-	ReqHanderReplica
+	ReqHandlerReplica
 }
 
 func NewReqHandlerMasterReplica(request []byte, s ReplicaServer) *ReqHanderMasterReplica {
-	return &ReqHanderMasterReplica{ReqHanderReplica{ReqHandlerImpl: ReqHandlerImpl{request: request}, replica: s}}
+	return &ReqHanderMasterReplica{ReqHandlerReplica{ReqHandlerImpl: ReqHandlerImpl{request: request}, replica: s}}
 }
 
 // Handles a requests silently, doesn not return a response
@@ -34,8 +35,26 @@ func (r *ReqHanderMasterReplica) HandleRequest() {
 			if err != nil {
 				fmt.Printf("Error: " + err.Error())
 			}
+		case "REPLCONF":
+			err := r.replicationConfig(&req)
+			if err != nil {
+				fmt.Printf("Error: " + err.Error())
+			}
 		default:
 			fmt.Printf("Unknown command: %s\n", req.command)
 		}
 	}
+}
+func (r *ReqHandlerReplica) replicationConfig(req *Request) error {
+	if len(req.args) < 2 {
+		return fmt.Errorf("REPLCONF command requires at least 2 arguments")
+	}
+	if req.args[0] == "GETACK" {
+		offset := r.replica.GetAckOffset()
+		err := r.replica.SendToMaster(newBulkArray("REPLCONF", "ACK", strconv.Itoa(offset)))
+		if err != nil {
+			return fmt.Errorf("error sending ACK to master: %s", err)
+		}
+	}
+	return nil
 }
