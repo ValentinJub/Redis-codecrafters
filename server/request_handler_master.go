@@ -54,6 +54,8 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		case "PSYNC":
 			go r.master.SendRDBFile(r.conn)
 			return r.psync(&req)
+		case "WAIT":
+			return r.master.Wait(&req)
 		default:
 			return newSimpleString("Unknown command")
 		}

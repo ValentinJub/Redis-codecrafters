@@ -16,7 +16,6 @@ func NewReqHandlerMasterReplica(request []byte, s ReplicaServer) *ReqHanderMaste
 
 // Handles a requests silently, doesn not return a response
 func (r *ReqHanderMasterReplica) HandleRequest() {
-	bytesToProcess := len(r.request)
 	re := strings.Split(string(r.request), CRLF)
 	if len(re) > 1 && len(re[1]) > 5 && re[1][:5] == "REDIS" {
 		fmt.Println("Ignoring Redis RDB")
@@ -47,7 +46,7 @@ func (r *ReqHanderMasterReplica) HandleRequest() {
 			fmt.Printf("Unknown command: %s\n", req.command)
 		}
 		r.replica.AddAckOffset(len)
-		fmt.Printf("Added %d bytes to offset, offset: %d\n", bytesToProcess, r.replica.GetAckOffset())
+		fmt.Printf("Added %d bytes to offset, offset: %d\n", len, r.replica.GetAckOffset())
 	}
 }
 func (r *ReqHandlerReplica) replicationConfig(req *Request) error {

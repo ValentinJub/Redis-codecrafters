@@ -20,3 +20,7 @@ func newBulkArray(element ...string) []byte {
 	}
 	return []byte(str)
 }
+
+func newInteger(i int) []byte {
+	return []byte(fmt.Sprintf(":%d%s", i, CRLF))
+}

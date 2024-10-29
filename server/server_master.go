@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/utils"
 )
@@ -17,6 +18,7 @@ type MasterServer interface {
 	GetReplicas() map[string]net.Conn
 	Propagate(req *Request)
 	SendRDBFile(conn net.Conn) error
+	Wait(req *Request) []byte
 }
 
 type MasterServerImpl struct {
@@ -122,4 +124,29 @@ func (s *MasterServerImpl) SendRDBFile(conn net.Conn) error {
 		return err
 	}
 	return nil
+}
+
+func (s *MasterServerImpl) Wait(req *Request) []byte {
+	if len(req.args) < 2 {
+		return newSimpleString("WAIT command requires at least 2 arguments (count of replicas and timeout)")
+	}
+	numOfReplicas, err := strconv.Atoi(req.args[0])
+	if err != nil {
+		return newSimpleString("Error parsing replicas count")
+	}
+	timeout, err := strconv.Atoi(req.args[1])
+	if err != nil {
+		return newSimpleString("Error parsing timeout")
+	}
+
+	fmt.Printf("Waiting for %d replicas with timeout %d\n", numOfReplicas, timeout)
+
+	if numOfReplicas == 0 {
+		// We can return immediately since there's no replica to propagate to
+		return newInteger(0)
+	}
+
+	// Propagate to all replicas
+
+	return newInteger(0)
 }
