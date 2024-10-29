@@ -24,6 +24,9 @@ type MasterServer interface {
 type MasterServerImpl struct {
 	RedisServerImpl
 	replicas map[string]net.Conn
+	// The replication backlog keeps track of the requests that need to be propagated to the replicas
+	// The key is the offset of the request in the replication stream
+	replicationBacklog map[int]Request
 }
 
 func NewMasterServer(args map[string]string) *MasterServerImpl {
@@ -39,7 +42,11 @@ func NewMasterServer(args map[string]string) *MasterServerImpl {
 	if !ok {
 		dbfile = ""
 	}
-	server := &MasterServerImpl{RedisServerImpl: RedisServerImpl{role: "master", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: utils.CreateReplicationID()}, replicas: make(map[string]net.Conn)}
+	server := &MasterServerImpl{RedisServerImpl: RedisServerImpl{
+		role: "master", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: utils.CreateReplicationID()},
+		replicas:           make(map[string]net.Conn),
+		replicationBacklog: make(map[int]Request),
+	}
 	server.rdb = NewRDBManager(dir, dbfile, server)
 	fmt.Printf("Master RedisServerImpl created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server
@@ -147,6 +154,17 @@ func (s *MasterServerImpl) Wait(req *Request) []byte {
 	}
 
 	// Propagate to all replicas
-
-	return newInteger(0)
+	count := 0
+	for _, replica := range s.replicas {
+		// Figure out what to propagate
+		if s.replicationOffset == 0 {
+			count++
+			fmt.Printf("Replicating to replica %s\n", replica.RemoteAddr().String())
+		} else {
+			// Check if the replica is up to date by doing a REPLCONF GETACK *
+			// We can then compare the offset of the replica with the master offset
+			// We then send the missing data to the replica
+		}
+	}
+	return newInteger(count)
 }
