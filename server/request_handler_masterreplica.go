@@ -46,7 +46,7 @@ func (r *ReqHanderMasterReplica) HandleRequest() {
 			fmt.Printf("Unknown command: %s\n", req.command)
 		}
 		r.replica.AddAckOffset(len)
-		fmt.Printf("Added %d bytes to offset, offset: %d\n", len, r.replica.GetAckOffset())
+		fmt.Printf("Added %d bytes to Replica offset, offset: %d\n", len, r.replica.GetAckOffset())
 	}
 }
 func (r *ReqHandlerReplica) replicationConfig(req *Request) error {

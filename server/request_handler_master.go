@@ -29,6 +29,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 	}
 
 	for _, req := range reqs {
+		len := len(newBulkArray(append([]string{req.command}, req.args...)...))
 		switch req.command {
 		case "PING":
 			return r.ping(&req)
@@ -40,6 +41,9 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 				return newSimpleString("Error: " + err.Error())
 			}
 			go r.master.Propagate(&req)
+			r.master.AddAckOffset(len)
+			r.master.CacheRequest(&req)
+			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", len, r.master.GetAckOffset())
 			return resp
 		case "GET":
 			return r.get(&req)
@@ -68,10 +72,16 @@ func (r *ReqHandlerMaster) replicationConfig(req *Request) []byte {
 		return newSimpleString("Error: REPLCONF command requires at least 2 arguments")
 	}
 	for _, arg := range req.args {
-		if arg == "listening-port" {
+		switch arg {
+		case "listening-port":
 			addr := r.conn.RemoteAddr().String()
 			r.master.AddReplica(addr, r.conn)
+		case "ACK":
+			fmt.Printf("Received ACK from replica %s\n", r.conn.RemoteAddr().String())
+			r.master.AddAckReceived()
+			return []byte{}
 		}
+
 	}
 	return newSimpleString("OK")
 }

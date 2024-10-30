@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/utils"
 )
@@ -19,6 +20,10 @@ type MasterServer interface {
 	Propagate(req *Request)
 	SendRDBFile(conn net.Conn) error
 	Wait(req *Request) []byte
+	CacheRequest(req *Request)
+	GetReplicationBacklog() map[int]Request
+	AddAckReceived()
+	ResetAckReceived()
 }
 
 type MasterServerImpl struct {
@@ -27,6 +32,7 @@ type MasterServerImpl struct {
 	// The replication backlog keeps track of the requests that need to be propagated to the replicas
 	// The key is the offset of the request in the replication stream
 	replicationBacklog map[int]Request
+	acksReceived       int
 }
 
 func NewMasterServer(args map[string]string) *MasterServerImpl {
@@ -52,8 +58,24 @@ func NewMasterServer(args map[string]string) *MasterServerImpl {
 	return server
 }
 
+func (s *MasterServerImpl) AddAckReceived() {
+	s.acksReceived++
+}
+
+func (s *MasterServerImpl) ResetAckReceived() {
+	s.acksReceived = 0
+}
+
 func (s *MasterServerImpl) GetReplicas() map[string]net.Conn {
 	return s.replicas
+}
+
+func (s *MasterServerImpl) GetReplicationBacklog() map[int]Request {
+	return s.replicationBacklog
+}
+
+func (s *MasterServerImpl) CacheRequest(req *Request) {
+	s.replicationBacklog[s.replicationOffset] = *req
 }
 
 func (s *MasterServerImpl) AddReplica(addr string, r net.Conn) {
@@ -133,6 +155,16 @@ func (s *MasterServerImpl) SendRDBFile(conn net.Conn) error {
 	return nil
 }
 
+/*
+WAIT numreplicas timeout
+
+This command blocks the current client until all the previous write commands are successfully transferred and acknowledged
+by at least the number of replicas specified in the numreplicas argument.
+If the value you specify for the timeout argument (in milliseconds) is reached, the command returns even if the specified number of replicas were not yet reached.
+
+The command will always return the number of replicas that acknowledged the write commands sent by the current client before the WAIT command
+both in the case where the specified number of replicas are reached, or when the timeout is reached.
+*/
 func (s *MasterServerImpl) Wait(req *Request) []byte {
 	if len(req.args) < 2 {
 		return newSimpleString("WAIT command requires at least 2 arguments (count of replicas and timeout)")
@@ -146,25 +178,40 @@ func (s *MasterServerImpl) Wait(req *Request) []byte {
 		return newSimpleString("Error parsing timeout")
 	}
 
-	fmt.Printf("Waiting for %d replicas with timeout %d\n", numOfReplicas, timeout)
-
 	if numOfReplicas == 0 {
-		// We can return immediately since there's no replica to propagate to
+		// We can return immediately since the number of replicas is 0
 		return newInteger(0)
+	} else if s.replicationOffset == 0 {
+		// Return the number of known replicas
+		return newInteger(len(s.GetReplicas()))
 	}
 
-	// Propagate to all replicas
-	count := 0
+	fmt.Printf("Waiting for %d replicas with %dms timeout\n", numOfReplicas, timeout)
+
+	start := time.Now().UnixMilli()
+	end := start + int64(timeout)
+
+	/*
+		Sends the REPLCONF GETACK command to all the replicas,
+		some replicas may answer or not, the number of ACKs received is counted
+		in the RequestHandlerMaster.replicationConfig method
+	*/
 	for _, replica := range s.replicas {
-		// Figure out what to propagate
-		if s.replicationOffset == 0 {
-			count++
-			fmt.Printf("Replicating to replica %s\n", replica.RemoteAddr().String())
-		} else {
-			// Check if the replica is up to date by doing a REPLCONF GETACK *
-			// We can then compare the offset of the replica with the master offset
-			// We then send the missing data to the replica
+		go replica.Write(newBulkArray("REPLCONF", "GETACK", "*"))
+	}
+
+	// The replication offset is incremented by 37 bytes for the REPLCONF GETACK command sent
+	s.replicationOffset += 37
+
+	// Count the number of ACKs received from the replicas
+	for s.acksReceived < numOfReplicas {
+		if time.Now().UnixMilli() > end {
+			fmt.Printf("Timeout reached\n")
+			break
 		}
 	}
-	return newInteger(count)
+
+	ackCopy := s.acksReceived
+	s.ResetAckReceived()
+	return newInteger(ackCopy)
 }
