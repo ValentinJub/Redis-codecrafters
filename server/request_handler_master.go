@@ -35,6 +35,16 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			return r.ping(&req)
 		case "ECHO":
 			return r.echo(&req)
+		case "XADD":
+			resp, err := r.master.XAdd(&req)
+			if err != nil {
+				return newSimpleString("Error: " + err.Error())
+			}
+			go r.master.Propagate(&req)
+			r.master.AddAckOffset(commandLen)
+			r.master.CacheRequest(&req)
+			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
+			return newBulkString(resp)
 		case "SET":
 			resp, err := r.set(&req)
 			if err != nil {

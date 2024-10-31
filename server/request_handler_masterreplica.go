@@ -32,6 +32,13 @@ func (r *ReqHanderMasterReplica) HandleRequest() {
 		len := len(newBulkArray(append([]string{req.command}, req.args...)...))
 		switch req.command {
 		case "PING":
+		case "XADD":
+			id, err := r.replica.XAdd(&req)
+			if err != nil {
+				fmt.Printf("Error setting XADD on MasterReplica Handler: " + err.Error())
+			} else {
+				fmt.Printf("XADD ID: %s added to replica\n", id)
+			}
 		case "SET":
 			_, err := r.set(&req)
 			if err != nil {

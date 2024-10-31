@@ -18,6 +18,7 @@ type RedisServer interface {
 	HandleConnection(conn net.Conn)
 	AddAckOffset(offset int)
 	GetAckOffset() int
+	XAdd(req *Request) (string, error)
 	RDBManager
 	Cache
 }
@@ -86,6 +87,10 @@ func (s *RedisServerImpl) SetExpiry(key, value string, expiry uint64) error {
 	return s.cache.SetExpiry(key, value, expiry)
 }
 
+func (s *RedisServerImpl) SetStream(key, id string, fields map[string]string) error {
+	return s.cache.SetStream(key, id, fields)
+}
+
 func (s *RedisServerImpl) Get(key string) (string, error) {
 	return s.cache.Get(key)
 }
@@ -104,4 +109,21 @@ func (s *RedisServerImpl) IsExpired(key string) bool {
 
 func (s *RedisServerImpl) Type(key string) string {
 	return s.cache.Type(key)
+}
+
+func (s *RedisServerImpl) XAdd(req *Request) (string, error) {
+	if len(req.args) < 4 {
+		return "", fmt.Errorf("XADD command requires at least 4 arguments")
+	}
+	// Extract the stream key and the fields
+	key := req.args[0]
+	id := req.args[1]
+	fields := make(map[string]string)
+	for i := 2; i < len(req.args); i += 2 {
+		if i+1 >= len(req.args) {
+			return "", fmt.Errorf("XADD command requires an even number of arguments")
+		}
+		fields[req.args[i]] = req.args[i+1]
+	}
+	return id, s.SetStream(key, id, fields)
 }

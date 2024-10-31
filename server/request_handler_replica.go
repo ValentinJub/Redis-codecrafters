@@ -31,12 +31,6 @@ func (r *ReqHandlerReplica) HandleRequest() []byte {
 			return r.ping(&req)
 		case "ECHO":
 			return r.echo(&req)
-		case "SET":
-			resp, err := r.set(&req)
-			if err != nil {
-				return newSimpleString("Error: " + err.Error())
-			}
-			return resp
 		case "GET":
 			return r.get(&req)
 		case "CONFIG":

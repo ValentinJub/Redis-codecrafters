@@ -10,6 +10,7 @@ import (
 type Cache interface {
 	Set(key string, value string) error
 	SetExpiry(key string, value string, expiry uint64) error
+	SetStream(key, id string, fields map[string]string) error
 	Get(key string) (string, error)
 	Keys(key string) []string
 	Type(key string) string
@@ -24,14 +25,57 @@ type CacheImpl struct {
 type Object struct {
 	value  string
 	expiry uint64
+	stream *Stream
+}
+
+/*
+
+entries:
+  - id: 1526985054069-0 # (ID of the first entry)
+    temperature: 36 # (A key value pair in the first entry)
+    humidity: 95 # (Another key value pair in the first entry)
+
+  - id: 1526985054079-0 # (ID of the second entry)
+    temperature: 37 # (A key value pair in the first entry)
+    humidity: 94 # (Another key value pair in the first entry)
+
+  # ... (and so on)
+
+*/
+
+type Stream struct {
+	entries []StreamEntry
+}
+
+type StreamEntry struct {
+	id     string
+	fields map[string]string
 }
 
 func NewCache() *CacheImpl {
 	return &CacheImpl{cache: make(map[string]Object)}
 }
 
+func newStream() *Stream {
+	return &Stream{entries: make([]StreamEntry, 0)}
+}
+
 func (s *CacheImpl) Set(key string, value string) error {
-	s.cache[key] = Object{value: value}
+	s.cache[key] = Object{value: value, stream: nil}
+	return nil
+}
+
+// Create or append to a stream
+func (s *CacheImpl) SetStream(key, id string, fields map[string]string) error {
+	if v, ok := s.cache[key]; ok {
+		if v.stream == nil {
+			v.stream = newStream()
+		}
+		v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
+		s.cache[key] = v
+	} else {
+		s.cache[key] = Object{stream: &Stream{entries: []StreamEntry{{id: id, fields: fields}}}}
+	}
 	return nil
 }
 
@@ -40,6 +84,7 @@ func (s *CacheImpl) SetExpiry(key string, value string, expiry uint64) error {
 	return nil
 }
 
+// Need to edit this to return the object instead of the value
 func (s *CacheImpl) Get(key string) (string, error) {
 	if v, ok := s.cache[key]; ok {
 		if s.IsExpired(key) {
@@ -51,6 +96,7 @@ func (s *CacheImpl) Get(key string) (string, error) {
 	}
 }
 
+// Return the keys matching the pattern
 func (s *CacheImpl) Keys(key string) []string {
 	keys := make([]string, 0)
 	keyRegexp := parseKey(key)
@@ -63,8 +109,12 @@ func (s *CacheImpl) Keys(key string) []string {
 	return keys
 }
 
+// Return the type of the key
 func (s *CacheImpl) Type(key string) string {
-	if _, ok := s.cache[key]; ok {
+	if v, ok := s.cache[key]; ok {
+		if v.stream != nil {
+			return "stream"
+		}
 		return "string"
 	}
 	return "none"
