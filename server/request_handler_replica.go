@@ -45,6 +45,11 @@ func (r *ReqHandlerReplica) HandleRequest() []byte {
 			return r.keys(&req)
 		case "INFO":
 			return r.info(&req)
+		case "TYPE":
+			if len(req.args) < 1 {
+				return newSimpleString("Error: TYPE command requires at least 1 argument")
+			}
+			return newSimpleString(r.replica.Type(req.args[0]))
 		default:
 			return newSimpleString("Unknown command")
 		}

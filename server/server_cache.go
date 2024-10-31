@@ -12,6 +12,7 @@ type Cache interface {
 	SetExpiry(key string, value string, expiry uint64) error
 	Get(key string) (string, error)
 	Keys(key string) []string
+	Type(key string) string
 	ExpireIn(key string, milliseconds uint64) error
 	IsExpired(key string) bool
 }
@@ -60,6 +61,13 @@ func (s *CacheImpl) Keys(key string) []string {
 		}
 	}
 	return keys
+}
+
+func (s *CacheImpl) Type(key string) string {
+	if _, ok := s.cache[key]; ok {
+		return "string"
+	}
+	return "none"
 }
 
 /*

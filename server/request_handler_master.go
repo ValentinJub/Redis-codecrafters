@@ -29,7 +29,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 	}
 
 	for _, req := range reqs {
-		len := len(newBulkArray(append([]string{req.command}, req.args...)...))
+		commandLen := len(newBulkArray(append([]string{req.command}, req.args...)...))
 		switch req.command {
 		case "PING":
 			return r.ping(&req)
@@ -41,9 +41,9 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 				return newSimpleString("Error: " + err.Error())
 			}
 			go r.master.Propagate(&req)
-			r.master.AddAckOffset(len)
+			r.master.AddAckOffset(commandLen)
 			r.master.CacheRequest(&req)
-			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", len, r.master.GetAckOffset())
+			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
 			return resp
 		case "GET":
 			return r.get(&req)
@@ -60,6 +60,11 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			return r.psync(&req)
 		case "WAIT":
 			return r.master.Wait(&req)
+		case "TYPE":
+			if len(req.args) < 1 {
+				return newSimpleString("Error: TYPE command requires at least 1 argument")
+			}
+			return newSimpleString(r.master.Type(req.args[0]))
 		default:
 			return newSimpleString("Unknown command")
 		}

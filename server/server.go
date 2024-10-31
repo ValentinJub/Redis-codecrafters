@@ -101,3 +101,7 @@ func (s *RedisServerImpl) ExpireIn(key string, milliseconds uint64) error {
 func (s *RedisServerImpl) IsExpired(key string) bool {
 	return s.cache.IsExpired(key)
 }
+
+func (s *RedisServerImpl) Type(key string) string {
+	return s.cache.Type(key)
+}
