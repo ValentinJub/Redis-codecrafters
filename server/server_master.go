@@ -99,12 +99,12 @@ func (s *MasterServerImpl) Listen() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		go s.HandleConnection(conn)
+		go s.HandleClientConnections(conn)
 	}
 }
 
 // Handle incoming TCP Requests
-func (s *MasterServerImpl) HandleConnection(conn net.Conn) {
+func (s *MasterServerImpl) HandleClientConnections(conn net.Conn) {
 	buff := make([]byte, 1024)
 	for {
 		// Read from the connection

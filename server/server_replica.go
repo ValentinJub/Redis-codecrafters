@@ -47,7 +47,7 @@ func NewReplicaServer(args map[string]string) *ReplicaServerImpl {
 	}
 	server := &ReplicaServerImpl{RedisServerImpl: RedisServerImpl{role: "slave", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: utils.CreateReplicationID()}, masterAddress: replicaof}
 	server.rdb = NewRDBManager(dir, dbfile, server)
-	fmt.Printf("Slave RedisServerImpl created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
+	fmt.Printf("Replica RedisServer created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server
 }
 
@@ -80,12 +80,12 @@ func (s *ReplicaServerImpl) Listen() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-		go s.HandleConnection(conn)
+		go s.HandleClientConnections(conn)
 	}
 }
 
 // Handle incoming TCP Requests
-func (s *ReplicaServerImpl) HandleConnection(conn net.Conn) {
+func (s *ReplicaServerImpl) HandleClientConnections(conn net.Conn) {
 	buff := make([]byte, 1024)
 	for {
 		// Read from the connection
@@ -101,7 +101,7 @@ func (s *ReplicaServerImpl) HandleConnection(conn net.Conn) {
 		// The data read from the TCP stream
 		request := buff[:bytesRead]
 		// Handles the decoded request and produce an answer
-		reqHandler := NewReqHandlerReplica(request, s)
+		reqHandler := NewRequestHandler(request, s)
 		response := reqHandler.HandleRequest()
 
 		_, err = conn.Write(response)

@@ -6,16 +6,17 @@ import (
 	"strings"
 )
 
-type ReqHanderMasterReplica struct {
-	ReqHandlerReplica
+type ReqHandlerMasterReplica struct {
+	ReqHandlerImpl
+	replica ReplicaServer
 }
 
-func NewReqHandlerMasterReplica(request []byte, s ReplicaServer) *ReqHanderMasterReplica {
-	return &ReqHanderMasterReplica{ReqHandlerReplica{ReqHandlerImpl: ReqHandlerImpl{request: request}, replica: s}}
+func NewReqHandlerMasterReplica(request []byte, s ReplicaServer) *ReqHandlerMasterReplica {
+	return &ReqHandlerMasterReplica{ReqHandlerImpl: ReqHandlerImpl{request: request, server: s}, replica: s}
 }
 
 // Handles a requests silently, doesn not return a response
-func (r *ReqHanderMasterReplica) HandleRequest() {
+func (r *ReqHandlerMasterReplica) HandleRequest() {
 	re := strings.Split(string(r.request), CRLF)
 	if len(re) > 1 && len(re[1]) > 5 && re[1][:5] == "REDIS" {
 		fmt.Println("Ignoring Redis RDB")
@@ -56,7 +57,8 @@ func (r *ReqHanderMasterReplica) HandleRequest() {
 		fmt.Printf("Added %d bytes to Replica offset, offset: %d\n", len, r.replica.GetAckOffset())
 	}
 }
-func (r *ReqHandlerReplica) replicationConfig(req *Request) error {
+
+func (r *ReqHandlerMasterReplica) replicationConfig(req *Request) error {
 	if len(req.args) < 2 {
 		return fmt.Errorf("REPLCONF command requires at least 2 arguments")
 	}

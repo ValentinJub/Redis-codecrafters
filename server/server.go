@@ -15,7 +15,7 @@ type RedisServer interface {
 	// Listen for TCP connections using our TCP listener.
 	// Encapsulates the request handling process
 	Listen()
-	HandleConnection(conn net.Conn)
+	HandleClientConnections(conn net.Conn)
 	AddAckOffset(offset int)
 	GetAckOffset() int
 	XAdd(req *Request) (string, error)

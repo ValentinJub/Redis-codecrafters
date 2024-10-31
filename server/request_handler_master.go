@@ -13,7 +13,7 @@ type ReqHandlerMaster struct {
 }
 
 func NewReqHandlerMaster(request []byte, s MasterServer, c net.Conn) *ReqHandlerMaster {
-	return &ReqHandlerMaster{ReqHandlerImpl: ReqHandlerImpl{request: request}, master: s, conn: c}
+	return &ReqHandlerMaster{ReqHandlerImpl: ReqHandlerImpl{request: request, server: s}, master: s, conn: c}
 }
 
 // Handles a request and returns a response
@@ -107,90 +107,4 @@ func (r *ReqHandlerMaster) psync(req *Request) []byte {
 	}
 	infos := r.master.Info()
 	return newBulkString("+FULLRESYNC " + infos["replicationID"] + " 0")
-}
-
-func (r *ReqHandlerMaster) info(req *Request) []byte {
-	if len(req.args) < 1 {
-		return newSimpleString("Error: INFO command requires at least 1 argument")
-	}
-	arg := req.args[0]
-	header := "# " + arg
-	infos := r.master.Info()
-	role := fmt.Sprintf("role:%s", infos["role"])
-	replID := fmt.Sprintf("%s_replid:%s", infos["role"], infos["replicationID"])
-	replOffset := fmt.Sprintf("%s_repl_offset:%s", infos["role"], infos["replicationOffset"])
-	return newBulkString(
-		header + "\n" + role + "\n" + replID + "\n" + replOffset + "\n",
-	)
-}
-
-func (r *ReqHandlerMaster) keys(req *Request) []byte {
-	// Dangerous, need to make sure args[0] is not empty and that no more keys follow
-	keys := r.master.Keys(req.args[0])
-	return newBulkArray(keys...)
-}
-
-func (r *ReqHandlerMaster) config(req *Request) []byte {
-	if len(req.args) < 1 {
-		return newSimpleString("Error: CONFIG command requires at least 1 argument (GET or SET)")
-	} else if req.args[0] == "GET" {
-		return r.configGet(req.args[1])
-	}
-	return []byte{0}
-}
-
-func (r *ReqHandlerMaster) configGet(key string) []byte {
-	dir, fn := r.master.RDBInfo()
-	switch key {
-	case "dir":
-		return newBulkArray("dir", dir)
-	case "dbfilename":
-		return newBulkArray("dbfilename", fn)
-	default:
-		return newBulkString("")
-	}
-}
-
-func (r *ReqHandlerMaster) ping(req *Request) []byte {
-	if len(req.args) > 0 {
-		return newBulkString(strings.Join(req.args, " "))
-	}
-	return newSimpleString("PONG")
-}
-
-func (r *ReqHandlerMaster) echo(req *Request) []byte {
-	return newBulkString(strings.Join(req.args, " "))
-}
-
-func (r *ReqHandlerMaster) set(req *Request) ([]byte, error) {
-	if len(req.args) < 2 {
-		return newSimpleString("error"), fmt.Errorf("error: SET command requires at least 2 arguments")
-	}
-	args, err := r.ExtractSetArgs(req.args)
-	if err != nil {
-		return newSimpleString("error"), fmt.Errorf("error: while extracting set args")
-	}
-	if args.nx {
-		if _, ok := r.master.Get(req.args[0]); ok == nil {
-			return newBulkString(""), fmt.Errorf("error: key already exists")
-		}
-	} else if args.xx {
-		if _, ok := r.master.Get(req.args[0]); ok != nil {
-			return newSimpleString(""), fmt.Errorf("error: key does not exist")
-		}
-	}
-	r.master.Set(req.args[0], req.args[1])
-	if args.expiry > 0 {
-		r.master.ExpireIn(req.args[0], uint64(args.expiry))
-	}
-
-	return newSimpleString("OK"), nil
-}
-
-func (r *ReqHandlerMaster) get(req *Request) []byte {
-	if len(req.args) < 1 {
-		return newSimpleString("Error: GET command requires at least 1 argument")
-	}
-	v, _ := r.master.Get(req.args[0])
-	return newBulkString(v)
 }
