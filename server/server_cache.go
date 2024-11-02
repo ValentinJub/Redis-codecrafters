@@ -133,9 +133,7 @@ func (s *CacheImpl) SetStream(key, id string, fields map[string]string) (string,
 		case AUTO:
 			// Generate the next ID
 			ms = int(time.Now().UnixMilli())
-			if len(v.stream.entries) == 0 {
-				seq = 1
-			}
+			seq = 0
 		case INCREMENT:
 			if ms == 0 {
 				seq = 1
