@@ -82,6 +82,20 @@ func (s *CacheImpl) SetStream(key, id string, fields map[string]string) (string,
 		switch type_ {
 		case AUTO:
 			// Generate the next ID
+			ms = int(time.Now().UnixMilli())
+			if len(v.stream.entries) == 0 {
+				seq = 1
+			} else {
+				lastID := v.stream.entries[len(v.stream.entries)-1].id
+				_, lastMs, lastSeq, _ := decodeID(lastID)
+				if lastMs == ms {
+					seq = lastSeq + 1
+				} else if lastMs < ms {
+					seq = 0
+				} else {
+					return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+				}
+			}
 		case INCREMENT:
 			// Define the sequence number, incrementing from the last ID if the last ID equals the current ID
 			if len(v.stream.entries) == 0 {
@@ -118,6 +132,10 @@ func (s *CacheImpl) SetStream(key, id string, fields map[string]string) (string,
 		switch type_ {
 		case AUTO:
 			// Generate the next ID
+			ms = int(time.Now().UnixMilli())
+			if len(v.stream.entries) == 0 {
+				seq = 1
+			}
 		case INCREMENT:
 			if ms == 0 {
 				seq = 1
