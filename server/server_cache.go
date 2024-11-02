@@ -11,7 +11,7 @@ import (
 type Cache interface {
 	Set(key string, value string) error
 	SetExpiry(key string, value string, expiry uint64) error
-	SetStream(key, id string, fields map[string]string) error
+	SetStream(key, id string, fields map[string]string) (string, error)
 	Get(key string) (string, error)
 	Keys(key string) []string
 	Type(key string) string
@@ -67,26 +67,73 @@ func (s *CacheImpl) Set(key string, value string) error {
 }
 
 // Create or append to a stream
-func (s *CacheImpl) SetStream(key, id string, fields map[string]string) error {
+func (s *CacheImpl) SetStream(key, id string, fields map[string]string) (string, error) {
 	if !isValidID(id) {
-		return fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
+		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
+	}
+	type_, ms, seq, err := decodeID(id)
+	if err != nil {
+		return "", err
 	}
 	if v, ok := s.cache[key]; ok {
 		if v.stream == nil {
 			v.stream = newStream()
-			v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
-		} else {
-			if isLastIDBefore(v.stream.entries[len(v.stream.entries)-1].id, id) {
-				v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
+		}
+		switch type_ {
+		case AUTO:
+			// Generate the next ID
+		case INCREMENT:
+			// Define the sequence number, incrementing from the last ID if the last ID equals the current ID
+			if len(v.stream.entries) == 0 {
+				seq = 1
 			} else {
-				return fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+				lastID := v.stream.entries[len(v.stream.entries)-1].id
+				_, lastMs, lastSeq, _ := decodeID(lastID)
+				if lastMs == ms {
+					seq = lastSeq + 1
+				} else if lastMs < ms {
+					seq = 0
+				} else {
+					return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+				}
+			}
+		case CLIENT:
+			if len(v.stream.entries) != 0 {
+				lastID := v.stream.entries[len(v.stream.entries)-1].id
+				_, lastMs, lastSeq, _ := decodeID(lastID)
+				if lastMs == ms {
+					if lastSeq >= seq {
+						return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+					}
+				} else if lastMs > ms {
+					return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+				}
 			}
 		}
+		id = fmt.Sprintf("%d-%d", ms, seq)
+		v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
 		s.cache[key] = v
 	} else {
+		// It's the first entry for this stream
+		switch type_ {
+		case AUTO:
+			// Generate the next ID
+		case INCREMENT:
+			if ms == 0 {
+				seq = 1
+			} else {
+				seq = 0
+			}
+		case CLIENT:
+			if (ms == 0 && seq < 1) || ms < 0 || (ms > 0 && seq < 0) {
+				return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+			}
+		}
+		id = fmt.Sprintf("%d-%d", ms, seq)
 		s.cache[key] = Object{stream: &Stream{entries: []StreamEntry{{id: id, fields: fields}}}}
 	}
-	return nil
+	fmt.Printf("About to return id: %s\n", id)
+	return id, nil
 }
 
 func (s *CacheImpl) SetExpiry(key string, value string, expiry uint64) error {
@@ -94,43 +141,38 @@ func (s *CacheImpl) SetExpiry(key string, value string, expiry uint64) error {
 	return nil
 }
 
-func isLastIDBefore(first, second string) bool {
-	parts1 := strings.Split(first, "-")
-	ms1, err := strconv.Atoi(parts1[0])
-	if err != nil {
-		return false
+const (
+	AUTO = iota
+	INCREMENT
+	CLIENT
+)
+
+// Type auto 0 - incrementing 1 - provided by the client 2
+func decodeID(id string) (type_, ms, seq int, err error) {
+	// Auto generatedID
+	if id == "*" {
+		return
 	}
-	seq1, err := strconv.Atoi(parts1[1])
-	if err != nil {
-		return false
+	parts := strings.Split(id, "-")
+	ms, _ = strconv.Atoi(parts[0])
+	if parts[1] == "*" {
+		return INCREMENT, ms, 0, nil
 	}
-	parts2 := strings.Split(second, "-")
-	ms2, err := strconv.Atoi(parts2[0])
-	if err != nil {
-		return false
-	}
-	seq2, err := strconv.Atoi(parts2[1])
-	if err != nil {
-		return false
-	}
-	if ms1 < ms2 {
-		return true
-	} else if ms1 == ms2 {
-		if seq1 < seq2 {
-			return true
-		} else {
-			return false
-		}
-	} else {
-		return false
-	}
+	seq, _ = strconv.Atoi(parts[1])
+	return CLIENT, ms, seq, nil
 }
 
 func isValidID(id string) bool {
+	if id == "*" {
+		return true
+	}
 	parts := strings.Split(id, "-")
 	ms, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return false
+	}
+	if parts[1] == "*" {
+		return ms >= 0
 	}
 	seq, err := strconv.Atoi(parts[1])
 	if err != nil {

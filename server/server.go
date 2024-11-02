@@ -87,7 +87,7 @@ func (s *RedisServerImpl) SetExpiry(key, value string, expiry uint64) error {
 	return s.cache.SetExpiry(key, value, expiry)
 }
 
-func (s *RedisServerImpl) SetStream(key, id string, fields map[string]string) error {
+func (s *RedisServerImpl) SetStream(key, id string, fields map[string]string) (string, error) {
 	return s.cache.SetStream(key, id, fields)
 }
 
@@ -125,5 +125,9 @@ func (s *RedisServerImpl) XAdd(req *Request) (string, error) {
 		}
 		fields[req.args[i]] = req.args[i+1]
 	}
-	return id, s.SetStream(key, id, fields)
+	newID, err := s.SetStream(key, id, fields)
+	if err != nil {
+		return "", err
+	}
+	return newID, nil
 }
