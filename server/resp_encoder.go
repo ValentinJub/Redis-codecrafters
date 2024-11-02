@@ -24,3 +24,7 @@ func newBulkArray(element ...string) []byte {
 func newInteger(i int) []byte {
 	return []byte(fmt.Sprintf(":%d%s", i, CRLF))
 }
+
+func newSimpleError(s string) []byte {
+	return []byte(fmt.Sprintf("-%s%s", s, CRLF))
+}

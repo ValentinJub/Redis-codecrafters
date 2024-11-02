@@ -38,7 +38,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		case "XADD":
 			resp, err := r.master.XAdd(&req)
 			if err != nil {
-				return newSimpleString("Error: " + err.Error())
+				return newSimpleError(err.Error())
 			}
 			go r.master.Propagate(&req)
 			r.master.AddAckOffset(commandLen)

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -67,11 +68,20 @@ func (s *CacheImpl) Set(key string, value string) error {
 
 // Create or append to a stream
 func (s *CacheImpl) SetStream(key, id string, fields map[string]string) error {
+	if !isValidID(id) {
+		return fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
+	}
 	if v, ok := s.cache[key]; ok {
 		if v.stream == nil {
 			v.stream = newStream()
+			v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
+		} else {
+			if isLastIDBefore(v.stream.entries[len(v.stream.entries)-1].id, id) {
+				v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
+			} else {
+				return fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+			}
 		}
-		v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
 		s.cache[key] = v
 	} else {
 		s.cache[key] = Object{stream: &Stream{entries: []StreamEntry{{id: id, fields: fields}}}}
@@ -82,6 +92,54 @@ func (s *CacheImpl) SetStream(key, id string, fields map[string]string) error {
 func (s *CacheImpl) SetExpiry(key string, value string, expiry uint64) error {
 	s.cache[key] = Object{value: value, expiry: expiry}
 	return nil
+}
+
+func isLastIDBefore(first, second string) bool {
+	parts1 := strings.Split(first, "-")
+	ms1, err := strconv.Atoi(parts1[0])
+	if err != nil {
+		return false
+	}
+	seq1, err := strconv.Atoi(parts1[1])
+	if err != nil {
+		return false
+	}
+	parts2 := strings.Split(second, "-")
+	ms2, err := strconv.Atoi(parts2[0])
+	if err != nil {
+		return false
+	}
+	seq2, err := strconv.Atoi(parts2[1])
+	if err != nil {
+		return false
+	}
+	if ms1 < ms2 {
+		return true
+	} else if ms1 == ms2 {
+		if seq1 < seq2 {
+			return true
+		} else {
+			return false
+		}
+	} else {
+		return false
+	}
+}
+
+func isValidID(id string) bool {
+	parts := strings.Split(id, "-")
+	ms, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+	seq, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+	if ms < 0 || seq < 1 {
+		return false
+	}
+	return true
 }
 
 // Need to edit this to return the object instead of the value
