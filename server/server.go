@@ -143,8 +143,8 @@ func (s *RedisServerImpl) XRange(req *Request) ([]StreamEntry, error) {
 		return nil, fmt.Errorf("XRANGE command requires at least 3 arguments")
 	}
 	key := req.args[0]
-	startID := 0
 	err := error(nil)
+	startID, endID := 0, 0
 	if req.args[1] != "-" {
 		startID, err = strconv.Atoi(strings.ReplaceAll(req.args[1], "-", ""))
 		if err != nil {
@@ -153,9 +153,13 @@ func (s *RedisServerImpl) XRange(req *Request) ([]StreamEntry, error) {
 	} else {
 		startID = 0
 	}
-	endID, err := strconv.Atoi(strings.ReplaceAll(req.args[2], "-", ""))
-	if err != nil {
-		return nil, fmt.Errorf("error parsing end ID")
+	if req.args[2] != "+" {
+		endID, err = strconv.Atoi(strings.ReplaceAll(req.args[2], "-", ""))
+		if err != nil {
+			return nil, fmt.Errorf("error parsing end ID")
+		}
+	} else {
+		endID = int(^uint(0) >> 1) // largest int
 	}
 	return s.GetStream(key, startID, endID)
 }

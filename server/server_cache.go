@@ -66,10 +66,6 @@ func NewCache() *CacheImpl {
 	return &CacheImpl{cache: make(map[string]Object)}
 }
 
-func newStream() *Stream {
-	return &Stream{entries: make([]StreamEntry, 0)}
-}
-
 func (s *CacheImpl) Set(key string, value string) error {
 	s.cache[key] = Object{value: value, stream: nil}
 	return nil
