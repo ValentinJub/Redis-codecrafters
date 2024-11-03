@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -21,6 +22,7 @@ type RedisServer interface {
 	GetAckOffset() int
 	XAdd(req *Request) (string, error)
 	XRange(req *Request) ([]StreamEntry, error)
+	XRead(req *Request) (map[string][]StreamEntry, error)
 	RDBManager
 	Cache
 }
@@ -162,4 +164,43 @@ func (s *RedisServerImpl) XRange(req *Request) ([]StreamEntry, error) {
 		endID = int(^uint(0) >> 1) // largest int
 	}
 	return s.GetStream(key, startID, endID)
+}
+
+func (s *RedisServerImpl) XRead(req *Request) (map[string][]StreamEntry, error) {
+	if len(req.args) < 3 {
+		return nil, fmt.Errorf("XREAD command requires at least 2 arguments")
+	}
+	type_ := req.args[0]
+
+	// Make the request case-insensitive
+	regexStream := regexp.MustCompile(`(?i)^STREAMS$`)
+	regexID := regexp.MustCompile(`^\d+-?\d*$`)
+	if !regexStream.MatchString(type_) {
+		return nil, fmt.Errorf("XREAD command requires the first argument to be STREAMS")
+	}
+	keys := make([]string, 0)
+	ids := make([]int, 0)
+	for i := 1; i < len(req.args); i++ {
+		if !regexID.MatchString(req.args[i]) {
+			keys = append(keys, req.args[i])
+		} else {
+			id, err := strconv.Atoi(strings.ReplaceAll(req.args[i], "-", ""))
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, id)
+		}
+	}
+	if len(keys) != len(ids) {
+		return nil, fmt.Errorf("XREAD command requires the same number of keys and IDs")
+	}
+	entriesMap := make(map[string][]StreamEntry)
+	for x, key := range keys {
+		entries, err := s.GetStream(key, ids[x], int(^uint(0)>>1))
+		if err != nil {
+			return nil, err
+		}
+		entriesMap[key] = entries
+	}
+	return entriesMap, nil
 }

@@ -73,6 +73,28 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			resp := newBulkArrayOfArrays(content...)
 			fmt.Printf("XRANGE: '%s'\n", strings.ReplaceAll(string(resp), "\r\n", "\\r\\n"))
 			return resp
+		case "XREAD":
+			entries, err := r.master.XRead(&req)
+			if err != nil {
+				return newSimpleError(err.Error())
+			}
+			keys := make([]string, 0)
+			for key, entries := range entries {
+				content := make([]string, 0)
+				for _, entry := range entries {
+					id, keyvalue := entry.Values()
+					inner := string(newBulkArray(keyvalue...))
+					entryID := string(newBulkString(id))
+					subArray := string(newBulkArrayOfArrays(entryID, inner))
+					content = append(content, subArray)
+				}
+				keyContent := string(newBulkArrayOfArrays(content...))
+				keyName := string(newBulkString(key))
+				keys = append(keys, string(newBulkArrayOfArrays(keyName, keyContent)))
+			}
+			resp := newBulkArrayOfArrays(keys...)
+			fmt.Printf("XREAD: '%s'\n", strings.ReplaceAll(string(resp), "\r\n", "\\r\\n"))
+			return resp
 		case "CONFIG":
 			return r.config(&req)
 		case "KEYS":
