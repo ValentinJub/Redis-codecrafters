@@ -143,9 +143,15 @@ func (s *RedisServerImpl) XRange(req *Request) ([]StreamEntry, error) {
 		return nil, fmt.Errorf("XRANGE command requires at least 3 arguments")
 	}
 	key := req.args[0]
-	startID, err := strconv.Atoi(strings.ReplaceAll(req.args[1], "-", ""))
-	if err != nil {
-		return nil, fmt.Errorf("error parsing start ID")
+	startID := 0
+	err := error(nil)
+	if req.args[1] != "-" {
+		startID, err = strconv.Atoi(strings.ReplaceAll(req.args[1], "-", ""))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		startID = 0
 	}
 	endID, err := strconv.Atoi(strings.ReplaceAll(req.args[2], "-", ""))
 	if err != nil {

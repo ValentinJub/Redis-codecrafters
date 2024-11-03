@@ -148,6 +148,8 @@ func (s *MasterServerImpl) SendRDBFile(conn net.Conn) error {
 		buffer.Write(data)
 	}
 	content := buffer.Bytes()
+	// Sleep 1 ms to prevent the replica receiving the RDB file before the FULLRESYNC command
+	time.Sleep(1 * time.Millisecond)
 	_, err = conn.Write(append([]byte(fmt.Sprintf("$%d\r\n", len(content))), content...))
 	if err != nil {
 		return err
