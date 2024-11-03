@@ -13,6 +13,7 @@ type Cache interface {
 	SetExpiry(key string, value string, expiry uint64) error
 	SetStream(key, id string, fields map[string]string) (string, error)
 	Get(key string) (string, error)
+	GetStream(key string, start, end int) ([]StreamEntry, error)
 	Keys(key string) []string
 	Type(key string) string
 	ExpireIn(key string, milliseconds uint64) error
@@ -53,6 +54,14 @@ type StreamEntry struct {
 	fields map[string]string
 }
 
+func (s *StreamEntry) Values() (string, []string) {
+	values := make([]string, 0)
+	for k, v := range s.fields {
+		values = append(values, k, v)
+	}
+	return s.id, values
+}
+
 func NewCache() *CacheImpl {
 	return &CacheImpl{cache: make(map[string]Object)}
 }
@@ -66,6 +75,26 @@ func (s *CacheImpl) Set(key string, value string) error {
 	return nil
 }
 
+func (s *CacheImpl) GetStream(key string, start, end int) ([]StreamEntry, error) {
+	if v, ok := s.cache[key]; ok {
+		if v.stream == nil {
+			return nil, fmt.Errorf("ERR The key is not a stream")
+		}
+		entries := make([]StreamEntry, 0)
+		for _, entry := range v.stream.entries {
+			entryID, err := strconv.Atoi(strings.ReplaceAll(entry.id, "-", ""))
+			if err != nil {
+				return nil, err
+			}
+			if entryID >= start && entryID <= end {
+				entries = append(entries, entry)
+			}
+		}
+		return entries, nil
+	}
+	return nil, fmt.Errorf("ERR The key does not exist")
+}
+
 // Create or append to a stream
 func (s *CacheImpl) SetStream(key, id string, fields map[string]string) (string, error) {
 	if !isValidID(id) {
@@ -75,43 +104,48 @@ func (s *CacheImpl) SetStream(key, id string, fields map[string]string) (string,
 	if err != nil {
 		return "", err
 	}
-	if v, ok := s.cache[key]; ok {
-		if v.stream == nil {
-			v.stream = newStream()
+	v, keyExists := s.cache[key]
+	switch type_ {
+	case AUTO:
+		ms = int(time.Now().UnixMilli())
+		if keyExists {
+			seq, err = defineSeq(v.stream, ms)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			seq = 0
 		}
-		switch type_ {
-		case AUTO:
-			// Generate the next ID
-			ms = int(time.Now().UnixMilli())
-			if len(v.stream.entries) == 0 {
-				seq = 1
-			} else {
-				lastID := v.stream.entries[len(v.stream.entries)-1].id
-				_, lastMs, lastSeq, _ := decodeID(lastID)
-				if lastMs == ms {
-					seq = lastSeq + 1
-				} else if lastMs < ms {
-					seq = 0
-				} else {
-					return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
-				}
-			}
-		case INCREMENT:
+		id = fmt.Sprintf("%d-%d", ms, seq)
+		if keyExists {
+			v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
+			s.cache[key] = v
+		} else {
+			s.cache[key] = Object{stream: &Stream{entries: []StreamEntry{{id: id, fields: fields}}}}
+		}
+	case INCREMENT:
+		if keyExists {
 			// Define the sequence number, incrementing from the last ID if the last ID equals the current ID
-			if len(v.stream.entries) == 0 {
+			seq, err = defineSeq(v.stream, ms)
+			if err != nil {
+				return "", err
+			}
+		} else {
+			if ms == 0 {
 				seq = 1
 			} else {
-				lastID := v.stream.entries[len(v.stream.entries)-1].id
-				_, lastMs, lastSeq, _ := decodeID(lastID)
-				if lastMs == ms {
-					seq = lastSeq + 1
-				} else if lastMs < ms {
-					seq = 0
-				} else {
-					return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
-				}
+				seq = 0
 			}
-		case CLIENT:
+		}
+		id = fmt.Sprintf("%d-%d", ms, seq)
+		if keyExists {
+			v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
+			s.cache[key] = v
+		} else {
+			s.cache[key] = Object{stream: &Stream{entries: []StreamEntry{{id: id, fields: fields}}}}
+		}
+	case CLIENT:
+		if keyExists {
 			if len(v.stream.entries) != 0 {
 				lastID := v.stream.entries[len(v.stream.entries)-1].id
 				_, lastMs, lastSeq, _ := decodeID(lastID)
@@ -123,33 +157,42 @@ func (s *CacheImpl) SetStream(key, id string, fields map[string]string) (string,
 					return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 				}
 			}
-		}
-		id = fmt.Sprintf("%d-%d", ms, seq)
-		v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
-		s.cache[key] = v
-	} else {
-		// It's the first entry for this stream
-		switch type_ {
-		case AUTO:
-			// Generate the next ID
-			ms = int(time.Now().UnixMilli())
-			seq = 0
-		case INCREMENT:
-			if ms == 0 {
-				seq = 1
-			} else {
-				seq = 0
-			}
-		case CLIENT:
+		} else {
 			if (ms == 0 && seq < 1) || ms < 0 || (ms > 0 && seq < 0) {
 				return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
 			}
 		}
 		id = fmt.Sprintf("%d-%d", ms, seq)
-		s.cache[key] = Object{stream: &Stream{entries: []StreamEntry{{id: id, fields: fields}}}}
+		if keyExists {
+			v.stream.entries = append(v.stream.entries, StreamEntry{id: id, fields: fields})
+			s.cache[key] = v
+		} else {
+			s.cache[key] = Object{stream: &Stream{entries: []StreamEntry{{id: id, fields: fields}}}}
+		}
+	default:
+		return "", fmt.Errorf("ERR Invalid ID type")
 	}
 	fmt.Printf("About to return id: %s\n", id)
 	return id, nil
+}
+
+// Define the next sequence number depending on the last ID
+func defineSeq(stream *Stream, ms int) (int, error) {
+	seq := 0
+	if len(stream.entries) == 0 {
+		seq = 1
+	} else {
+		lastID := stream.entries[len(stream.entries)-1].id
+		_, lastMs, lastSeq, _ := decodeID(lastID)
+		if lastMs == ms {
+			seq = lastSeq + 1
+		} else if lastMs < ms {
+			seq = 0
+		} else {
+			return -1, fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+		}
+	}
+	return seq, nil
 }
 
 func (s *CacheImpl) SetExpiry(key string, value string, expiry uint64) error {

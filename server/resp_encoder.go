@@ -21,6 +21,14 @@ func newBulkArray(element ...string) []byte {
 	return []byte(str)
 }
 
+func newBulkArrayOfArrays(arrays ...string) []byte {
+	str := []byte(fmt.Sprintf("*%d%s", len(arrays), CRLF))
+	for _, array := range arrays {
+		str = append(str, []byte(array)...)
+	}
+	return str
+}
+
 func newInteger(i int) []byte {
 	return []byte(fmt.Sprintf(":%d%s", i, CRLF))
 }

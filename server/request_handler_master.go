@@ -57,6 +57,22 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			return resp
 		case "GET":
 			return r.get(&req)
+		case "XRANGE":
+			entries, err := r.master.XRange(&req)
+			if err != nil {
+				return newSimpleError(err.Error())
+			}
+			content := make([]string, 0)
+			for _, entry := range entries {
+				id, keyvalue := entry.Values()
+				inner := string(newBulkArray(keyvalue...))
+				entryID := string(newBulkString(id))
+				subArray := string(newBulkArrayOfArrays(entryID, inner))
+				content = append(content, subArray)
+			}
+			resp := newBulkArrayOfArrays(content...)
+			fmt.Printf("XRANGE: '%s'\n", strings.ReplaceAll(string(resp), "\r\n", "\\r\\n"))
+			return resp
 		case "CONFIG":
 			return r.config(&req)
 		case "KEYS":
@@ -66,7 +82,6 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		case "REPLCONF":
 			return r.replicationConfig(&req)
 		case "PSYNC":
-			go r.master.SendRDBFile(r.conn)
 			return r.psync(&req)
 		case "WAIT":
 			return r.master.Wait(&req)
@@ -106,5 +121,6 @@ func (r *ReqHandlerMaster) psync(req *Request) []byte {
 		return newSimpleString("Error: PSYNC command requires at least 2 arguments")
 	}
 	infos := r.master.Info()
+	go r.master.SendRDBFile(r.conn)
 	return newBulkString("+FULLRESYNC " + infos["replicationID"] + " 0")
 }

@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type RedisServer interface {
@@ -19,6 +20,7 @@ type RedisServer interface {
 	AddAckOffset(offset int)
 	GetAckOffset() int
 	XAdd(req *Request) (string, error)
+	XRange(req *Request) ([]StreamEntry, error)
 	RDBManager
 	Cache
 }
@@ -130,4 +132,24 @@ func (s *RedisServerImpl) XAdd(req *Request) (string, error) {
 		return "", err
 	}
 	return newID, nil
+}
+
+func (s *RedisServerImpl) GetStream(key string, start, end int) ([]StreamEntry, error) {
+	return s.cache.GetStream(key, start, end)
+}
+
+func (s *RedisServerImpl) XRange(req *Request) ([]StreamEntry, error) {
+	if len(req.args) < 3 {
+		return nil, fmt.Errorf("XRANGE command requires at least 3 arguments")
+	}
+	key := req.args[0]
+	startID, err := strconv.Atoi(strings.ReplaceAll(req.args[1], "-", ""))
+	if err != nil {
+		return nil, fmt.Errorf("error parsing start ID")
+	}
+	endID, err := strconv.Atoi(strings.ReplaceAll(req.args[2], "-", ""))
+	if err != nil {
+		return nil, fmt.Errorf("error parsing end ID")
+	}
+	return s.GetStream(key, startID, endID)
 }
