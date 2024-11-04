@@ -133,6 +133,7 @@ type XReadArg struct {
 	keys    []string
 	ids     []int
 	blockMs int
+	lock    bool
 }
 
 func newXReadArg() XReadArg {
@@ -140,6 +141,7 @@ func newXReadArg() XReadArg {
 		keys:    make([]string, 0),
 		ids:     make([]int, 0),
 		blockMs: 0,
+		lock:    false,
 	}
 }
 
@@ -163,6 +165,7 @@ func XReadArgParser(args []string) (XReadArg, error) {
 				return XReadArg{}, err
 			}
 			argsParsed.blockMs = blockMs
+			argsParsed.lock = true
 			i++
 		} else if regexStream.MatchString(arg) {
 			isStream = true

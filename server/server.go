@@ -168,9 +168,14 @@ func (s *RedisServerImpl) XRange(req *Request) ([]StreamEntry, error) {
 
 func (s *RedisServerImpl) XRead(args XReadArg) (map[string][]StreamEntry, error) {
 	entriesMap := make(map[string][]StreamEntry)
-	if args.blockMs != 0 {
+	if args.lock {
 		now := time.Now().UnixMilli()
-		endTime := now + int64(args.blockMs)
+		var endTime int64
+		if args.blockMs == 0 { // Lock the transaction until a new entry is added
+			endTime = int64(^uint(0) >> 1)
+		} else {
+			endTime = now + int64(args.blockMs)
+		}
 		for now < endTime {
 			for x, key := range args.keys {
 				entries, err := s.GetStream(key, args.ids[x], int(^uint(0)>>1))
