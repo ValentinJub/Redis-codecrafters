@@ -83,10 +83,6 @@ func (s *CacheImpl) Set(key string, value string) error {
 
 func (s *CacheImpl) Increment(key string) (int, error) {
 	if v, ok := s.cache[key]; ok {
-		if v.value == "" {
-			s.cache[key] = Object{value: "1", stream: nil}
-			return 1, nil
-		}
 		i, err := strconv.Atoi(v.value)
 		if err != nil {
 			return 0, err
@@ -94,8 +90,10 @@ func (s *CacheImpl) Increment(key string) (int, error) {
 		i++
 		s.cache[key] = Object{value: strconv.Itoa(i), stream: nil}
 		return i, nil
+	} else {
+		s.cache[key] = Object{value: "1", stream: nil}
+		return 1, nil
 	}
-	return 0, fmt.Errorf("key not found")
 }
 
 func (s *CacheImpl) GetStream(key string, start, end int) ([]StreamEntry, error) {
