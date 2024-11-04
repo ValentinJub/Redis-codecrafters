@@ -66,7 +66,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			}
 			return encodeXRangeResponse(entries)
 		case "XREAD":
-			args, err := XReadArgParser(req.args)
+			args, err := r.XReadArgParser(req.args)
 			if err != nil {
 				return newSimpleError(err.Error())
 			}
@@ -145,7 +145,7 @@ func newXReadArg() XReadArg {
 	}
 }
 
-func XReadArgParser(args []string) (XReadArg, error) {
+func (r *ReqHandlerMaster) XReadArgParser(args []string) (XReadArg, error) {
 	blockRegexp := regexp.MustCompile(`(?i)^BLOCK$`)
 	regexStream := regexp.MustCompile(`(?i)^STREAMS$`)
 	regexID := regexp.MustCompile(`^\d+-?\d*$`)
@@ -156,7 +156,24 @@ func XReadArgParser(args []string) (XReadArg, error) {
 	argsParsed := newXReadArg()
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if blockRegexp.MatchString(arg) {
+		if arg == "$" { // Akin to using the lastID entry in the stream
+			argsParsed.ids = append(argsParsed.ids, -1)
+			keyIndex := len(argsParsed.keys) - 1
+			if keyIndex < 0 {
+				return XReadArg{}, fmt.Errorf("XREAD command requires a key before the $ argument")
+			}
+			// Get the last entry from the stream
+			entry, err := r.master.GetLastEntryFromStream(argsParsed.keys[keyIndex])
+			if err != nil {
+				return XReadArg{}, err
+			}
+			if entry.IsEmpty() { // If the stream is empty, set the ID to 0 to effectively read from the beginning
+				argsParsed.ids[keyIndex] = 0
+				continue
+			}
+			id, _ := strconv.Atoi(strings.ReplaceAll(entry.ID(), "-", ""))
+			argsParsed.ids[keyIndex] = id + 1
+		} else if blockRegexp.MatchString(arg) {
 			if i+1 >= len(args) {
 				return XReadArg{}, fmt.Errorf("XREAD block argument requires a timestamp")
 			}

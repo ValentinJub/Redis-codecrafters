@@ -99,6 +99,10 @@ func (s *RedisServerImpl) Get(key string) (string, error) {
 	return s.cache.Get(key)
 }
 
+func (s *RedisServerImpl) GetLastEntryFromStream(key string) (StreamEntry, error) {
+	return s.cache.GetLastEntryFromStream(key)
+}
+
 func (s *RedisServerImpl) Keys(key string) []string {
 	return s.cache.Keys(key)
 }

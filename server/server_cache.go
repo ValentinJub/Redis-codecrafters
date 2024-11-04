@@ -14,6 +14,7 @@ type Cache interface {
 	SetStream(key, id string, fields map[string]string) (string, error)
 	Get(key string) (string, error)
 	GetStream(key string, start, end int) ([]StreamEntry, error)
+	GetLastEntryFromStream(key string) (StreamEntry, error)
 	Keys(key string) []string
 	Type(key string) string
 	ExpireIn(key string, milliseconds uint64) error
@@ -62,6 +63,14 @@ func (s *StreamEntry) Values() (string, []string) {
 	return s.id, values
 }
 
+func (s *StreamEntry) ID() string {
+	return s.id
+}
+
+func (s *StreamEntry) IsEmpty() bool {
+	return len(s.fields) == 0 && s.id == ""
+}
+
 func NewCache() *CacheImpl {
 	return &CacheImpl{cache: make(map[string]Object)}
 }
@@ -89,6 +98,19 @@ func (s *CacheImpl) GetStream(key string, start, end int) ([]StreamEntry, error)
 		return entries, nil
 	}
 	return nil, fmt.Errorf("ERR The key does not exist")
+}
+
+func (s *CacheImpl) GetLastEntryFromStream(key string) (StreamEntry, error) {
+	if v, ok := s.cache[key]; ok {
+		if v.stream == nil {
+			return StreamEntry{}, fmt.Errorf("ERR The key is not a stream")
+		}
+		if len(v.stream.entries) == 0 {
+			return StreamEntry{}, nil
+		}
+		return v.stream.entries[len(v.stream.entries)-1], nil
+	}
+	return StreamEntry{}, fmt.Errorf("ERR The key does not exist")
 }
 
 // Create or append to a stream
