@@ -49,7 +49,7 @@ func NewMasterServer(args map[string]string) *MasterServerImpl {
 		dbfile = ""
 	}
 	server := &MasterServerImpl{RedisServerImpl: RedisServerImpl{
-		role: "master", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: utils.CreateReplicationID()},
+		role: "master", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: utils.CreateReplicationID(), QueuedRequests: make(map[string][]Request)},
 		replicas:           make(map[string]net.Conn),
 		replicationBacklog: make(map[int]Request),
 	}

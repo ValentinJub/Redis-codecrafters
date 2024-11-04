@@ -45,7 +45,7 @@ func NewReplicaServer(args map[string]string) *ReplicaServerImpl {
 		fmt.Println("Missing argument for --replicaof")
 		os.Exit(1)
 	}
-	server := &ReplicaServerImpl{RedisServerImpl: RedisServerImpl{role: "slave", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: utils.CreateReplicationID()}, masterAddress: replicaof}
+	server := &ReplicaServerImpl{RedisServerImpl: RedisServerImpl{role: "slave", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: utils.CreateReplicationID(), QueuedRequests: map[string][]Request{}}, masterAddress: replicaof}
 	server.rdb = NewRDBManager(dir, dbfile, server)
 	fmt.Printf("Replica RedisServer created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server

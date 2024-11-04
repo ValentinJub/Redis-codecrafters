@@ -23,6 +23,7 @@ type RedisServer interface {
 	XAdd(*Request) (string, error)
 	XRange(*Request) ([]StreamEntry, error)
 	XRead(XReadArg) (map[string][]StreamEntry, error)
+	Multi(addr string) error
 	RDBManager
 	Cache
 }
@@ -41,6 +42,7 @@ type RedisServerImpl struct {
 	cache             Cache
 	replicationID     string
 	replicationOffset int
+	QueuedRequests    map[string][]Request // key is the address of the client
 }
 
 func (s *RedisServerImpl) AddAckOffset(offset int) {
@@ -142,6 +144,11 @@ func (s *RedisServerImpl) XAdd(req *Request) (string, error) {
 		return "", err
 	}
 	return newID, nil
+}
+
+func (s *RedisServerImpl) Multi(addr string) error {
+	s.QueuedRequests[addr] = make([]Request, 0)
+	return nil
 }
 
 func (s *RedisServerImpl) GetStream(key string, start, end int) ([]StreamEntry, error) {

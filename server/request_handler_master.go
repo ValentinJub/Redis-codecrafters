@@ -90,6 +90,9 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 				return newBulkString("")
 			}
 			return encodeXReadResponse(args.keys, xreadEntries)
+		case "MULTI":
+			r.master.Multi(r.conn.RemoteAddr().String())
+			return newSimpleString("OK")
 		case "CONFIG":
 			return r.config(&req)
 		case "KEYS":
