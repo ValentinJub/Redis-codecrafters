@@ -30,7 +30,7 @@ func (r *ReqHandlerMasterReplica) HandleRequest() {
 	}
 
 	for _, req := range reqs {
-		len := len(newBulkArray(append([]string{req.command}, req.args...)...))
+		commandLen := len(newBulkArray(append([]string{req.command}, req.args...)...))
 		switch req.command {
 		case "PING":
 		case "XADD":
@@ -45,6 +45,17 @@ func (r *ReqHandlerMasterReplica) HandleRequest() {
 			if err != nil {
 				fmt.Printf("Error: " + err.Error())
 			}
+		case "INCR":
+			// Must check for length of args
+			if len(req.args) < 1 {
+				fmt.Printf("INCR command requires at least 1 argument")
+				continue
+			}
+			_, err := r.replica.Increment(req.args[0])
+			if err != nil {
+				fmt.Printf("Error: " + err.Error())
+			}
+			fmt.Printf("Added %d bytes to Replica offset, offset: %d\n", commandLen, r.replica.GetAckOffset())
 		case "REPLCONF":
 			err := r.replicationConfig(&req)
 			if err != nil {
@@ -53,8 +64,8 @@ func (r *ReqHandlerMasterReplica) HandleRequest() {
 		default:
 			fmt.Printf("Unknown command: %s\n", req.command)
 		}
-		r.replica.AddAckOffset(len)
-		fmt.Printf("Added %d bytes to Replica offset, offset: %d\n", len, r.replica.GetAckOffset())
+		r.replica.AddAckOffset(commandLen)
+		fmt.Printf("Added %d bytes to Replica offset, offset: %d\n", commandLen, r.replica.GetAckOffset())
 	}
 }
 

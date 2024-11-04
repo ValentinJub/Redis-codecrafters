@@ -57,6 +57,19 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			r.master.CacheRequest(&req)
 			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
 			return resp
+		case "INCR":
+			if len(req.args) < 1 {
+				return newSimpleString("Error: INCR command requires at least 1 argument")
+			}
+			newValue, err := r.master.Increment(req.args[0])
+			if err != nil {
+				return newSimpleString("Error: " + err.Error())
+			}
+			go r.master.Propagate(&req)
+			r.master.AddAckOffset(commandLen)
+			r.master.CacheRequest(&req)
+			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
+			return newInteger(newValue)
 		case "GET":
 			return r.get(&req)
 		case "XRANGE":
@@ -158,7 +171,7 @@ func (r *ReqHandlerMaster) XReadArgParser(args []string) (XReadArg, error) {
 		arg := args[i]
 		if arg == "$" { // Akin to using the lastID entry in the stream
 			argsParsed.ids = append(argsParsed.ids, -1)
-			keyIndex := len(argsParsed.keys) - 1
+			keyIndex := len(argsParsed.ids) - 1
 			if keyIndex < 0 {
 				return XReadArg{}, fmt.Errorf("XREAD command requires a key before the $ argument")
 			}

@@ -87,6 +87,10 @@ func (s *RedisServerImpl) Set(key, value string) error {
 	return s.cache.Set(key, value)
 }
 
+func (s *RedisServerImpl) Increment(key string) (int, error) {
+	return s.cache.Increment(key)
+}
+
 func (s *RedisServerImpl) SetExpiry(key, value string, expiry uint64) error {
 	return s.cache.SetExpiry(key, value, expiry)
 }

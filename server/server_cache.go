@@ -15,6 +15,7 @@ type Cache interface {
 	Get(key string) (string, error)
 	GetStream(key string, start, end int) ([]StreamEntry, error)
 	GetLastEntryFromStream(key string) (StreamEntry, error)
+	Increment(key string) (int, error)
 	Keys(key string) []string
 	Type(key string) string
 	ExpireIn(key string, milliseconds uint64) error
@@ -78,6 +79,23 @@ func NewCache() *CacheImpl {
 func (s *CacheImpl) Set(key string, value string) error {
 	s.cache[key] = Object{value: value, stream: nil}
 	return nil
+}
+
+func (s *CacheImpl) Increment(key string) (int, error) {
+	if v, ok := s.cache[key]; ok {
+		if v.value == "" {
+			s.cache[key] = Object{value: "1", stream: nil}
+			return 1, nil
+		}
+		i, err := strconv.Atoi(v.value)
+		if err != nil {
+			return 0, err
+		}
+		i++
+		s.cache[key] = Object{value: strconv.Itoa(i), stream: nil}
+		return i, nil
+	}
+	return 0, fmt.Errorf("key not found")
 }
 
 func (s *CacheImpl) GetStream(key string, start, end int) ([]StreamEntry, error) {
