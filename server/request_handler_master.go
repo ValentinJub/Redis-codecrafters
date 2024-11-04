@@ -59,7 +59,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			return resp
 		case "INCR":
 			if len(req.args) < 1 {
-				return newSimpleString("Error: INCR command requires at least 1 argument")
+				return newSimpleError("ERR value is not an integer or out of range")
 			}
 			newValue, err := r.master.Increment(req.args[0])
 			if err != nil {
