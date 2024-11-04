@@ -50,7 +50,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		case "SET":
 			resp, err := r.set(&req)
 			if err != nil {
-				return newSimpleString("Error: " + err.Error())
+				return newSimpleError("ERR " + err.Error())
 			}
 			go r.master.Propagate(&req)
 			r.master.AddAckOffset(commandLen)
@@ -59,11 +59,11 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			return resp
 		case "INCR":
 			if len(req.args) < 1 {
-				return newSimpleError("ERR value is not an integer or out of range")
+				return newSimpleError("ERR INCR command requires at least 1 argument")
 			}
 			newValue, err := r.master.Increment(req.args[0])
 			if err != nil {
-				return newSimpleString("Error: " + err.Error())
+				return newSimpleError("ERR value is not an integer or out of range")
 			}
 			go r.master.Propagate(&req)
 			r.master.AddAckOffset(commandLen)
@@ -104,7 +104,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			return r.master.Wait(&req)
 		case "TYPE":
 			if len(req.args) < 1 {
-				return newSimpleString("Error: TYPE command requires at least 1 argument")
+				return newSimpleError("ERR TYPE command requires at least 1 argument")
 			}
 			return newSimpleString(r.master.Type(req.args[0]))
 		default:
@@ -116,7 +116,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 
 func (r *ReqHandlerMaster) replicationConfig(req *Request) []byte {
 	if len(req.args) < 2 {
-		return newSimpleString("Error: REPLCONF command requires at least 2 arguments")
+		return newSimpleError("ERR REPLCONF command requires at least 2 arguments")
 	}
 	for _, arg := range req.args {
 		switch arg {
@@ -135,7 +135,7 @@ func (r *ReqHandlerMaster) replicationConfig(req *Request) []byte {
 
 func (r *ReqHandlerMaster) psync(req *Request) []byte {
 	if len(req.args) < 2 {
-		return newSimpleString("Error: PSYNC command requires at least 2 arguments")
+		return newSimpleError("ERR PSYNC command requires at least 2 arguments")
 	}
 	infos := r.master.Info()
 	go r.master.SendRDBFile(r.conn)
