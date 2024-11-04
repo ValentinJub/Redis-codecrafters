@@ -3,6 +3,8 @@ package server
 import (
 	"fmt"
 	"net"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -62,39 +64,19 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			if err != nil {
 				return newSimpleError(err.Error())
 			}
-			content := make([]string, 0)
-			for _, entry := range entries {
-				id, keyvalue := entry.Values()
-				inner := string(newBulkArray(keyvalue...))
-				entryID := string(newBulkString(id))
-				subArray := string(newBulkArrayOfArrays(entryID, inner))
-				content = append(content, subArray)
-			}
-			resp := newBulkArrayOfArrays(content...)
-			fmt.Printf("XRANGE: '%s'\n", strings.ReplaceAll(string(resp), "\r\n", "\\r\\n"))
-			return resp
+			return encodeXRangeResponse(entries)
 		case "XREAD":
-			entries, err := r.master.XRead(&req)
+			args, err := XReadArgParser(req.args)
 			if err != nil {
 				return newSimpleError(err.Error())
 			}
-			keys := make([]string, 0)
-			for key, entries := range entries {
-				content := make([]string, 0)
-				for _, entry := range entries {
-					id, keyvalue := entry.Values()
-					inner := string(newBulkArray(keyvalue...))
-					entryID := string(newBulkString(id))
-					subArray := string(newBulkArrayOfArrays(entryID, inner))
-					content = append(content, subArray)
-				}
-				keyContent := string(newBulkArrayOfArrays(content...))
-				keyName := string(newBulkString(key))
-				keys = append(keys, string(newBulkArrayOfArrays(keyName, keyContent)))
+			xreadEntries, err := r.master.XRead(args)
+			if err != nil {
+				return newSimpleError(err.Error())
+			} else if len(xreadEntries) == 0 {
+				return newBulkString("")
 			}
-			resp := newBulkArrayOfArrays(keys...)
-			fmt.Printf("XREAD: '%s'\n", strings.ReplaceAll(string(resp), "\r\n", "\\r\\n"))
-			return resp
+			return encodeXReadResponse(args.keys, xreadEntries)
 		case "CONFIG":
 			return r.config(&req)
 		case "KEYS":
@@ -145,4 +127,100 @@ func (r *ReqHandlerMaster) psync(req *Request) []byte {
 	infos := r.master.Info()
 	go r.master.SendRDBFile(r.conn)
 	return newBulkString("+FULLRESYNC " + infos["replicationID"] + " 0")
+}
+
+type XReadArg struct {
+	keys    []string
+	ids     []int
+	blockMs int
+}
+
+func newXReadArg() XReadArg {
+	return XReadArg{
+		keys:    make([]string, 0),
+		ids:     make([]int, 0),
+		blockMs: 0,
+	}
+}
+
+func XReadArgParser(args []string) (XReadArg, error) {
+	blockRegexp := regexp.MustCompile(`(?i)^BLOCK$`)
+	regexStream := regexp.MustCompile(`(?i)^STREAMS$`)
+	regexID := regexp.MustCompile(`^\d+-?\d*$`)
+	isStream := false
+	if len(args) < 3 {
+		return XReadArg{}, fmt.Errorf("XREAD command requires at least 3 arguments")
+	}
+	argsParsed := newXReadArg()
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if blockRegexp.MatchString(arg) {
+			if i+1 >= len(args) {
+				return XReadArg{}, fmt.Errorf("XREAD block argument requires a timestamp")
+			}
+			blockMs, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return XReadArg{}, err
+			}
+			argsParsed.blockMs = blockMs
+			i++
+		} else if regexStream.MatchString(arg) {
+			isStream = true
+		} else if regexID.MatchString(arg) {
+			id, err := strconv.Atoi(strings.ReplaceAll(arg, "-", ""))
+			if err != nil {
+				return XReadArg{}, err
+			}
+			argsParsed.ids = append(argsParsed.ids, id+1)
+		} else {
+			if isStream {
+				argsParsed.keys = append(argsParsed.keys, arg)
+			}
+		}
+	}
+	if !isStream {
+		return XReadArg{}, fmt.Errorf("XREAD command requires the STREAMS argument to be passed")
+	} else if len(argsParsed.keys) != len(argsParsed.ids) {
+		return XReadArg{}, fmt.Errorf("XREAD command requires the same number of keys and IDs")
+	}
+	return argsParsed, nil
+}
+
+func encodeXRangeResponse(entries []StreamEntry) []byte {
+	content := make([]string, 0)
+	for _, entry := range entries {
+		id, keyvalue := entry.Values()
+		inner := string(newBulkArray(keyvalue...))
+		entryID := string(newBulkString(id))
+		subArray := string(newBulkArrayOfArrays(entryID, inner))
+		content = append(content, subArray)
+	}
+	resp := newBulkArrayOfArrays(content...)
+	fmt.Printf("XRANGE: '%s'\n", strings.ReplaceAll(string(resp), "\r\n", "\\r\\n"))
+	return resp
+}
+
+func encodeXReadResponse(keyOrder []string, entryMap map[string][]StreamEntry) []byte {
+	keys := make([]string, 0)
+	for _, key := range keyOrder {
+		entries, ok := entryMap[key]
+		if !ok {
+			fmt.Printf("Key %s not found in entries\n", key)
+			continue
+		}
+		content := make([]string, 0)
+		for _, entry := range entries {
+			id, keyvalue := entry.Values()
+			inner := string(newBulkArray(keyvalue...))
+			entryID := string(newBulkString(id))
+			subArray := string(newBulkArrayOfArrays(entryID, inner))
+			content = append(content, subArray)
+		}
+		keyContent := string(newBulkArrayOfArrays(content...))
+		keyName := string(newBulkString(key))
+		keys = append(keys, string(newBulkArrayOfArrays(keyName, keyContent)))
+	}
+	resp := newBulkArrayOfArrays(keys...)
+	fmt.Printf("XREAD: '%s'\n", strings.ReplaceAll(string(resp), "\r\n", "\\r\\n"))
+	return resp
 }

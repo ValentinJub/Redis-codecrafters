@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type RedisServer interface {
@@ -20,9 +20,9 @@ type RedisServer interface {
 	HandleClientConnections(conn net.Conn)
 	AddAckOffset(offset int)
 	GetAckOffset() int
-	XAdd(req *Request) (string, error)
-	XRange(req *Request) ([]StreamEntry, error)
-	XRead(req *Request) (map[string][]StreamEntry, error)
+	XAdd(*Request) (string, error)
+	XRange(*Request) ([]StreamEntry, error)
+	XRead(XReadArg) (map[string][]StreamEntry, error)
 	RDBManager
 	Cache
 }
@@ -166,41 +166,33 @@ func (s *RedisServerImpl) XRange(req *Request) ([]StreamEntry, error) {
 	return s.GetStream(key, startID, endID)
 }
 
-func (s *RedisServerImpl) XRead(req *Request) (map[string][]StreamEntry, error) {
-	if len(req.args) < 3 {
-		return nil, fmt.Errorf("XREAD command requires at least 2 arguments")
-	}
-	type_ := req.args[0]
-
-	// Make the request case-insensitive
-	regexStream := regexp.MustCompile(`(?i)^STREAMS$`)
-	regexID := regexp.MustCompile(`^\d+-?\d*$`)
-	if !regexStream.MatchString(type_) {
-		return nil, fmt.Errorf("XREAD command requires the first argument to be STREAMS")
-	}
-	keys := make([]string, 0)
-	ids := make([]int, 0)
-	for i := 1; i < len(req.args); i++ {
-		if !regexID.MatchString(req.args[i]) {
-			keys = append(keys, req.args[i])
-		} else {
-			id, err := strconv.Atoi(strings.ReplaceAll(req.args[i], "-", ""))
+func (s *RedisServerImpl) XRead(args XReadArg) (map[string][]StreamEntry, error) {
+	entriesMap := make(map[string][]StreamEntry)
+	if args.blockMs != 0 {
+		now := time.Now().UnixMilli()
+		endTime := now + int64(args.blockMs)
+		for now < endTime {
+			for x, key := range args.keys {
+				entries, err := s.GetStream(key, args.ids[x], int(^uint(0)>>1))
+				if err != nil {
+					return nil, err
+				}
+				if len(entries) > 0 {
+					entriesMap[key] = entries
+					return entriesMap, nil
+				}
+			}
+			time.Sleep(5 * time.Millisecond)
+			now = time.Now().UnixMilli()
+		}
+	} else {
+		for x, key := range args.keys {
+			entries, err := s.GetStream(key, args.ids[x], int(^uint(0)>>1))
 			if err != nil {
 				return nil, err
 			}
-			ids = append(ids, id)
+			entriesMap[key] = entries
 		}
-	}
-	if len(keys) != len(ids) {
-		return nil, fmt.Errorf("XREAD command requires the same number of keys and IDs")
-	}
-	entriesMap := make(map[string][]StreamEntry)
-	for x, key := range keys {
-		entries, err := s.GetStream(key, ids[x], int(^uint(0)>>1))
-		if err != nil {
-			return nil, err
-		}
-		entriesMap[key] = entries
 	}
 	return entriesMap, nil
 }
