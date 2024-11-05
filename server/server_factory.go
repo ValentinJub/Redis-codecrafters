@@ -12,9 +12,8 @@ type ServerManager interface {
 
 // Implementation of the ServerManager interface
 type ServerManagerImpl struct {
-	args    map[string]string
-	master  MasterServer
-	replica ReplicaServer
+	args   map[string]string
+	server RedisServer
 }
 
 func NewServerManager(args map[string]string) ServerManager {
@@ -25,11 +24,11 @@ func NewServerManager(args map[string]string) ServerManager {
 func (s *ServerManagerImpl) SpwanServer() RedisServer {
 	switch getServerType(s.args) {
 	case MASTER:
-		s.master = NewMasterServer(s.args)
-		return s.master
+		s.server = NewMasterServer(s.args)
+		return s.server
 	case REPLICA:
-		s.replica = NewReplicaServer(s.args)
-		return s.replica
+		s.server = NewReplicaServer(s.args)
+		return s.server
 	default:
 		return nil
 	}
