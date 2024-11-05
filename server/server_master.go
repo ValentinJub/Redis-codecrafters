@@ -122,7 +122,10 @@ func (s *MasterServerImpl) HandleClientConnections(conn net.Conn) {
 		// Handles the decoded request and produce an answer
 		reqHandler := NewReqHandlerMaster(request, s, conn)
 		response := reqHandler.HandleRequest()
-
+		// The requestHandler can return an empty response, in which case we don't write anything
+		if len(response) == 0 {
+			break
+		}
 		_, err = conn.Write(response)
 		if err != nil {
 			fmt.Println(err)

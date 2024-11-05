@@ -17,9 +17,14 @@ type RedisServer interface {
 	// Listen for TCP connections using our TCP listener.
 	// Encapsulates the request handling process
 	Listen()
+	SendTo(net.Conn, []byte)
 	HandleClientConnections(conn net.Conn)
 	AddAckOffset(offset int)
 	GetAckOffset() int
+	AddToQueue(addr string, req Request)
+	RemoveFromQueue(addr string)
+	GetQueuedRequests(string) []Request
+	IsInQueue(addr string) bool
 	XAdd(*Request) (string, error)
 	XRange(*Request) ([]StreamEntry, error)
 	XRead(XReadArg) (map[string][]StreamEntry, error)
@@ -45,8 +50,38 @@ type RedisServerImpl struct {
 	QueuedRequests    map[string][]Request // key is the address of the client
 }
 
+// Increment the replication offset
 func (s *RedisServerImpl) AddAckOffset(offset int) {
 	s.replicationOffset += offset
+}
+
+// Appends a request to the queue of requests for a given client
+func (s *RedisServerImpl) AddToQueue(addr string, req Request) {
+	s.QueuedRequests[addr] = append(s.QueuedRequests[addr], req)
+}
+
+// Removes a client from the queue of requests
+func (s *RedisServerImpl) RemoveFromQueue(addr string) {
+	delete(s.QueuedRequests, addr)
+}
+
+// Checks if a client is in the queue
+func (s *RedisServerImpl) IsInQueue(addr string) bool {
+	_, ok := s.QueuedRequests[addr]
+	return ok
+}
+
+// Returns the queued requests for a given client
+func (s *RedisServerImpl) GetQueuedRequests(addr string) []Request {
+	return s.QueuedRequests[addr]
+}
+
+// Sends data to a client
+func (s *RedisServerImpl) SendTo(conn net.Conn, data []byte) {
+	_, err := conn.Write(data)
+	if err != nil {
+		fmt.Println("Error sending data to client: ", err.Error())
+	}
 }
 
 // Initialise the server, creating a listener
@@ -59,6 +94,7 @@ func (s *RedisServerImpl) Init() {
 	s.listener = l
 }
 
+// Return information about the server
 func (s *RedisServerImpl) Info() map[string]string {
 	return map[string]string{
 		"role":              s.role,
@@ -69,6 +105,7 @@ func (s *RedisServerImpl) Info() map[string]string {
 	}
 }
 
+// Get the current replication offset
 func (s *RedisServerImpl) GetAckOffset() int {
 	return s.replicationOffset
 }
@@ -146,6 +183,7 @@ func (s *RedisServerImpl) XAdd(req *Request) (string, error) {
 	return newID, nil
 }
 
+// Start queueing requests for a MULTI transaction
 func (s *RedisServerImpl) Multi(addr string) error {
 	s.QueuedRequests[addr] = make([]Request, 0)
 	return nil

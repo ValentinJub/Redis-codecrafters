@@ -56,3 +56,7 @@ func (r *Request) Decode() error {
 	}
 	return nil
 }
+
+func (r *Request) Encode() []byte {
+	return newBulkArray(append([]string{r.command}, r.args...)...)
+}

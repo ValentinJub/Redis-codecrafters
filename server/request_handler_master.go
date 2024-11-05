@@ -30,7 +30,33 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		return []byte{}
 	}
 
+	// This properly handles multiple requests received at once
+	answerQueue := make([][]byte, 0)
+	if len(reqs) > 1 {
+		fmt.Printf("Multiple requests received\n")
+		for x, req := range reqs {
+			fmt.Printf("Request %d: %v\n", x, req)
+			reqHandler := NewReqHandlerMaster(req.Encode(), r.master, r.conn)
+			resp := reqHandler.HandleRequest()
+			answerQueue = append(answerQueue, resp)
+		}
+		for _, resp := range answerQueue {
+			// Goroutine to send the response to the client
+			go r.master.SendTo(r.conn, resp)
+		}
+		return []byte{}
+	}
+
+	// This loop is uselss since we are returning a response per request, any request after the first one won't be processed, leaving as is for now
+	// The loop above fixes that by processing all requests individually and gathering the responses
 	for _, req := range reqs {
+
+		// Check if the request needs to be queued
+		if r.master.IsInQueue(r.conn.RemoteAddr().String()) {
+			r.master.AddToQueue(r.conn.RemoteAddr().String(), req)
+			return newSimpleString("QUEUED")
+		}
+
 		commandLen := len(newBulkArray(append([]string{req.command}, req.args...)...))
 		switch req.command {
 		case "PING":
@@ -93,6 +119,9 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		case "MULTI":
 			r.master.Multi(r.conn.RemoteAddr().String())
 			return newSimpleString("OK")
+		case "EXEC":
+			r.exec() // exec is self sufficient, it sends the response to the client
+			return []byte{}
 		case "CONFIG":
 			return r.config(&req)
 		case "KEYS":
@@ -115,6 +144,28 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		}
 	}
 	return []byte{}
+}
+
+func (r *ReqHandlerMaster) exec() {
+	if r.master.IsInQueue(r.conn.RemoteAddr().String()) {
+		reqs := r.master.GetQueuedRequests(r.conn.RemoteAddr().String())
+		bigReq := make([]byte, 0)
+		for _, req := range reqs {
+			bigReq = append(bigReq, req.Encode()...)
+		}
+		reqHandler := NewReqHandlerMaster(bigReq, r.master, r.conn)
+		resp := reqHandler.HandleRequest()
+		if len(resp) > 0 {
+			go r.master.SendTo(r.conn, resp)
+		}
+		// for _, req := range reqs {
+		// 	reqHandler := NewReqHandlerMaster(req.Encode(), r.master, r.conn)
+		// 	resp := reqHandler.HandleRequest()
+		// 	go r.master.SendTo(r.conn, resp)
+		// }
+	} else {
+		r.master.SendTo(r.conn, newSimpleError("ERR EXEC without MULTI"))
+	}
 }
 
 func (r *ReqHandlerMaster) replicationConfig(req *Request) []byte {
