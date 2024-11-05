@@ -36,6 +36,9 @@ type RedisServer interface {
 const (
 	SERVER_ADDR = "127.0.0.1"
 	SERVER_PORT = "6379"
+	CRLF        = "\r\n"
+	LARGEST_INT = int(^uint(0) >> 1)
+	EMPTY_RDB   = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
 )
 
 type RedisServerImpl struct {
@@ -231,7 +234,7 @@ func (s *RedisServerImpl) XRead(args XReadArg) (map[string][]StreamEntry, error)
 		}
 		for now < endTime {
 			for x, key := range args.keys {
-				entries, err := s.GetStream(key, args.ids[x], int(^uint(0)>>1))
+				entries, err := s.GetStream(key, args.ids[x], LARGEST_INT)
 				if err != nil {
 					return nil, err
 				}
@@ -245,7 +248,7 @@ func (s *RedisServerImpl) XRead(args XReadArg) (map[string][]StreamEntry, error)
 		}
 	} else {
 		for x, key := range args.keys {
-			entries, err := s.GetStream(key, args.ids[x], int(^uint(0)>>1))
+			entries, err := s.GetStream(key, args.ids[x], LARGEST_INT)
 			if err != nil {
 				return nil, err
 			}

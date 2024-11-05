@@ -31,124 +31,117 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 	}
 
 	// This properly handles multiple requests received at once
-	answerQueue := make([][]byte, 0)
+	// It decodes each request and processes them individually
+	// It then sends the responses back to the client
 	if len(reqs) > 1 {
-		fmt.Printf("Multiple requests received\n")
+		fmt.Printf("Processing multiple requests, number of requests: %d\n", len(reqs))
+		bigResp := make([]string, 0)
 		for x, req := range reqs {
-			fmt.Printf("Decoded request %d: command: %s, args: %v\n", x, req.command, req.args)
+			fmt.Printf("Sending decoded request %d to subreqhandler: command: %s, args: %v\n", x, req.command, req.args)
 			reqHandler := NewReqHandlerMaster(req.Encode(), r.master, r.conn)
 			resp := reqHandler.HandleRequest()
-			answerQueue = append(answerQueue, resp)
-		}
-		bigResp := make([]string, 0)
-		for _, resp := range answerQueue {
 			bigResp = append(bigResp, string(resp))
 		}
 		r.master.SendTo(r.conn, newBulkArrayOfArrays(bigResp...))
 		return []byte{}
 	}
 
-	// This loop is uselss since we are returning a response per request, any request after the first one won't be processed, leaving as is for now
-	// The loop above fixes that by processing all requests individually and gathering the responses
-	for _, req := range reqs {
-
-		fmt.Printf("Decoded request: command: %s, args: %v\n", req.command, req.args)
-		// Check if the request needs to be queued, if so, add it to the queue and return QUEUED
-		// Do not queue EXEC commands
-		if r.master.IsInQueue(r.conn.RemoteAddr().String()) && req.command != "EXEC" && req.command != "DISCARD" {
-			r.master.AddToQueue(r.conn.RemoteAddr().String(), req)
-			return newSimpleString("QUEUED")
-		}
-
-		commandLen := len(newBulkArray(append([]string{req.command}, req.args...)...))
-		switch req.command {
-		case "PING":
-			return r.ping(&req)
-		case "ECHO":
-			return r.echo(&req)
-		case "XADD":
-			resp, err := r.master.XAdd(&req)
-			if err != nil {
-				return newSimpleError(err.Error())
-			}
-			go r.master.Propagate(&req)
-			r.master.AddAckOffset(commandLen)
-			r.master.CacheRequest(&req)
-			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
-			return newBulkString(resp)
-		case "SET":
-			resp, err := r.set(&req)
-			if err != nil {
-				return newSimpleError("ERR " + err.Error())
-			}
-			go r.master.Propagate(&req)
-			r.master.AddAckOffset(commandLen)
-			r.master.CacheRequest(&req)
-			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
-			return resp
-		case "INCR":
-			if len(req.args) < 1 {
-				return newSimpleError("ERR INCR command requires at least 1 argument")
-			}
-			newValue, err := r.master.Increment(req.args[0])
-			if err != nil {
-				return newSimpleError("ERR value is not an integer or out of range")
-			}
-			go r.master.Propagate(&req)
-			r.master.AddAckOffset(commandLen)
-			r.master.CacheRequest(&req)
-			fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
-			return newInteger(newValue)
-		case "GET":
-			return r.get(&req)
-		case "XRANGE":
-			entries, err := r.master.XRange(&req)
-			if err != nil {
-				return newSimpleError(err.Error())
-			}
-			return encodeXRangeResponse(entries)
-		case "XREAD":
-			args, err := r.XReadArgParser(req.args)
-			if err != nil {
-				return newSimpleError(err.Error())
-			}
-			xreadEntries, err := r.master.XRead(args)
-			if err != nil {
-				return newSimpleError(err.Error())
-			} else if len(xreadEntries) == 0 {
-				return newBulkString("")
-			}
-			return encodeXReadResponse(args.keys, xreadEntries)
-		case "MULTI":
-			r.master.Multi(r.conn.RemoteAddr().String())
-			return newSimpleString("OK")
-		case "EXEC":
-			r.exec() // exec is self sufficient, it sends the response to the client
-			return []byte{}
-		case "DISCARD":
-			return r.discard()
-		case "CONFIG":
-			return r.config(&req)
-		case "KEYS":
-			return r.keys(&req)
-		case "INFO":
-			return r.info(&req)
-		case "REPLCONF":
-			return r.replicationConfig(&req)
-		case "PSYNC":
-			return r.psync(&req)
-		case "WAIT":
-			return r.master.Wait(&req)
-		case "TYPE":
-			if len(req.args) < 1 {
-				return newSimpleError("ERR TYPE command requires at least 1 argument")
-			}
-			return newSimpleString(r.master.Type(req.args[0]))
-		default:
-			return newSimpleString("Unknown command")
-		}
+	req := reqs[0]
+	fmt.Printf("Decoded request: command: %s, args: %v\n", req.command, req.args)
+	// Check if the request needs to be queued, if so, add it to the queue and return QUEUED
+	// Do not queue EXEC && DISCARD commands as they are meant to exec/interrupt the queue
+	if r.master.IsInQueue(r.conn.RemoteAddr().String()) && req.command != "EXEC" && req.command != "DISCARD" {
+		r.master.AddToQueue(r.conn.RemoteAddr().String(), req)
+		return newSimpleString("QUEUED")
 	}
-	return []byte{}
+
+	commandLen := len(newBulkArray(append([]string{req.command}, req.args...)...))
+	switch req.command {
+	case "PING":
+		return r.ping(&req)
+	case "ECHO":
+		return r.echo(&req)
+	case "XADD":
+		resp, err := r.master.XAdd(&req)
+		if err != nil {
+			return newSimpleError(err.Error())
+		}
+		go r.master.Propagate(&req)
+		r.master.AddAckOffset(commandLen)
+		r.master.CacheRequest(&req)
+		fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
+		return newBulkString(resp)
+	case "SET":
+		resp, err := r.set(&req)
+		if err != nil {
+			return newSimpleError("ERR " + err.Error())
+		}
+		go r.master.Propagate(&req)
+		r.master.AddAckOffset(commandLen)
+		r.master.CacheRequest(&req)
+		fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
+		return resp
+	case "INCR":
+		if len(req.args) < 1 {
+			return newSimpleError("ERR INCR command requires at least 1 argument")
+		}
+		newValue, err := r.master.Increment(req.args[0])
+		if err != nil {
+			return newSimpleError("ERR value is not an integer or out of range")
+		}
+		go r.master.Propagate(&req)
+		r.master.AddAckOffset(commandLen)
+		r.master.CacheRequest(&req)
+		fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
+		return newInteger(newValue)
+	case "GET":
+		return r.get(&req)
+	case "XRANGE":
+		entries, err := r.master.XRange(&req)
+		if err != nil {
+			return newSimpleError(err.Error())
+		}
+		return encodeXRangeResponse(entries)
+	case "XREAD":
+		args, err := r.XReadArgParser(req.args)
+		if err != nil {
+			return newSimpleError(err.Error())
+		}
+		xreadEntries, err := r.master.XRead(args)
+		if err != nil {
+			return newSimpleError(err.Error())
+		} else if len(xreadEntries) == 0 {
+			return newBulkString("")
+		}
+		return encodeXReadResponse(args.keys, xreadEntries)
+	case "MULTI":
+		r.master.Multi(r.conn.RemoteAddr().String())
+		return newSimpleString("OK")
+	case "EXEC":
+		r.exec() // exec is self sufficient, it sends the response to the client
+		return []byte{}
+	case "DISCARD":
+		return r.discard()
+	case "CONFIG":
+		return r.config(&req)
+	case "KEYS":
+		return r.keys(&req)
+	case "INFO":
+		return r.info(&req)
+	case "REPLCONF":
+		return r.replicationConfig(&req)
+	case "PSYNC":
+		return r.psync(&req)
+	case "WAIT":
+		return r.master.Wait(&req)
+	case "TYPE":
+		if len(req.args) < 1 {
+			return newSimpleError("ERR TYPE command requires at least 1 argument")
+		}
+		return newSimpleString(r.master.Type(req.args[0]))
+	default:
+		return newSimpleError("ERR unknown command")
+	}
 }
 
 func (r *ReqHandlerMaster) discard() []byte {
