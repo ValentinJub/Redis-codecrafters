@@ -177,11 +177,6 @@ func (r *ReqHandlerMaster) exec() {
 		if len(resp) > 0 {
 			go r.master.SendTo(r.conn, resp)
 		}
-		// for _, req := range reqs {
-		// 	reqHandler := NewReqHandlerMaster(req.Encode(), r.master, r.conn)
-		// 	resp := reqHandler.HandleRequest()
-		// 	go r.master.SendTo(r.conn, resp)
-		// }
 	} else {
 		r.master.SendTo(r.conn, newSimpleError("ERR EXEC without MULTI"))
 	}
