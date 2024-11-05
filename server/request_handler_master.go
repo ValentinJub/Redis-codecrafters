@@ -152,6 +152,7 @@ func (r *ReqHandlerMaster) exec() {
 		reqs := r.master.GetQueuedRequests(r.conn.RemoteAddr().String())
 		if len(reqs) == 0 {
 			r.master.SendTo(r.conn, newBulkArray([]string{}...))
+			r.master.RemoveFromQueue(r.conn.RemoteAddr().String())
 			return
 		}
 		bigReq := make([]byte, 0)
