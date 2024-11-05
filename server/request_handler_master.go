@@ -35,15 +35,16 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 	if len(reqs) > 1 {
 		fmt.Printf("Multiple requests received\n")
 		for x, req := range reqs {
-			fmt.Printf("Request %d: %v\n", x, req)
+			fmt.Printf("Decoded request %d: command: %s, args: %v\n", x, req.command, req.args)
 			reqHandler := NewReqHandlerMaster(req.Encode(), r.master, r.conn)
 			resp := reqHandler.HandleRequest()
 			answerQueue = append(answerQueue, resp)
 		}
+		bigResp := make([]string, 0)
 		for _, resp := range answerQueue {
-			// Goroutine to send the response to the client
-			go r.master.SendTo(r.conn, resp)
+			bigResp = append(bigResp, string(resp))
 		}
+		r.master.SendTo(r.conn, newBulkArrayOfArrays(bigResp...))
 		return []byte{}
 	}
 
@@ -51,6 +52,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 	// The loop above fixes that by processing all requests individually and gathering the responses
 	for _, req := range reqs {
 
+		fmt.Printf("Decoded request: command: %s, args: %v\n", req.command, req.args)
 		// Check if the request needs to be queued, if so, add it to the queue and return QUEUED
 		// Do not queue EXEC commands
 		if r.master.IsInQueue(r.conn.RemoteAddr().String()) && req.command != "EXEC" {
@@ -159,12 +161,12 @@ func (r *ReqHandlerMaster) exec() {
 		for _, req := range reqs {
 			bigReq = append(bigReq, req.Encode()...)
 		}
+		r.master.RemoveFromQueue(r.conn.RemoteAddr().String())
 		reqHandler := NewReqHandlerMaster(bigReq, r.master, r.conn)
 		resp := reqHandler.HandleRequest()
 		if len(resp) > 0 {
 			go r.master.SendTo(r.conn, resp)
 		}
-		r.master.RemoveFromQueue(r.conn.RemoteAddr().String())
 		// for _, req := range reqs {
 		// 	reqHandler := NewReqHandlerMaster(req.Encode(), r.master, r.conn)
 		// 	resp := reqHandler.HandleRequest()
