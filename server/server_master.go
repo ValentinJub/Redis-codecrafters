@@ -124,7 +124,7 @@ func (s *MasterServerImpl) HandleClientConnections(conn net.Conn) {
 		response := reqHandler.HandleRequest()
 		// The requestHandler can return an empty response, in which case we don't write anything
 		if len(response) == 0 {
-			break
+			continue
 		}
 		_, err = conn.Write(response)
 		if err != nil {
@@ -203,6 +203,7 @@ func (s *MasterServerImpl) Wait(req *Request) []byte {
 	*/
 	for _, replica := range s.replicas {
 		go replica.Write(newBulkArray("REPLCONF", "GETACK", "*"))
+		fmt.Printf("Sent REPLCONF GETACK to replica %s\n", replica.RemoteAddr().String())
 	}
 
 	// The replication offset is incremented by 37 bytes for the REPLCONF GETACK command sent

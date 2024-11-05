@@ -158,6 +158,7 @@ func (r *ReqHandlerMaster) exec() {
 		if len(resp) > 0 {
 			go r.master.SendTo(r.conn, resp)
 		}
+		r.master.RemoveFromQueue(r.conn.RemoteAddr().String())
 		// for _, req := range reqs {
 		// 	reqHandler := NewReqHandlerMaster(req.Encode(), r.master, r.conn)
 		// 	resp := reqHandler.HandleRequest()
