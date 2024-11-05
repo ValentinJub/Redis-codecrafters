@@ -55,7 +55,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		fmt.Printf("Decoded request: command: %s, args: %v\n", req.command, req.args)
 		// Check if the request needs to be queued, if so, add it to the queue and return QUEUED
 		// Do not queue EXEC commands
-		if r.master.IsInQueue(r.conn.RemoteAddr().String()) && req.command != "EXEC" {
+		if r.master.IsInQueue(r.conn.RemoteAddr().String()) && req.command != "EXEC" && req.command != "DISCARD" {
 			r.master.AddToQueue(r.conn.RemoteAddr().String(), req)
 			return newSimpleString("QUEUED")
 		}
@@ -125,6 +125,8 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		case "EXEC":
 			r.exec() // exec is self sufficient, it sends the response to the client
 			return []byte{}
+		case "DISCARD":
+			return r.discard()
 		case "CONFIG":
 			return r.config(&req)
 		case "KEYS":
@@ -147,6 +149,14 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		}
 	}
 	return []byte{}
+}
+
+func (r *ReqHandlerMaster) discard() []byte {
+	if r.master.IsInQueue(r.conn.RemoteAddr().String()) {
+		r.master.RemoveFromQueue(r.conn.RemoteAddr().String())
+		return newSimpleString("OK")
+	}
+	return newSimpleError("ERR DISCARD without MULTI")
 }
 
 func (r *ReqHandlerMaster) exec() {
