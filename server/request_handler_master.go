@@ -51,8 +51,9 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 	// The loop above fixes that by processing all requests individually and gathering the responses
 	for _, req := range reqs {
 
-		// Check if the request needs to be queued
-		if r.master.IsInQueue(r.conn.RemoteAddr().String()) {
+		// Check if the request needs to be queued, if so, add it to the queue and return QUEUED
+		// Do not queue EXEC commands
+		if r.master.IsInQueue(r.conn.RemoteAddr().String()) && req.command != "EXEC" {
 			r.master.AddToQueue(r.conn.RemoteAddr().String(), req)
 			return newSimpleString("QUEUED")
 		}
