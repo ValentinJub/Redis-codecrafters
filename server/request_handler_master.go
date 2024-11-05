@@ -149,6 +149,10 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 func (r *ReqHandlerMaster) exec() {
 	if r.master.IsInQueue(r.conn.RemoteAddr().String()) {
 		reqs := r.master.GetQueuedRequests(r.conn.RemoteAddr().String())
+		if len(reqs) == 0 {
+			r.master.SendTo(r.conn, newBulkArray([]string{}...))
+			return
+		}
 		bigReq := make([]byte, 0)
 		for _, req := range reqs {
 			bigReq = append(bigReq, req.Encode()...)
