@@ -87,6 +87,7 @@ func (s *ReplicaServerImpl) Listen() {
 
 // Handle incoming TCP Requests
 func (s *ReplicaServerImpl) HandleClientConnections(conn net.Conn) {
+	defer conn.Close()
 	buff := make([]byte, 1024)
 	for {
 		// Read from the connection
@@ -108,18 +109,12 @@ func (s *ReplicaServerImpl) HandleClientConnections(conn net.Conn) {
 		// Check if the client is still connected
 		if !s.IsConnected(conn.RemoteAddr().String()) {
 			fmt.Printf("Client %s disconnected\n", conn.RemoteAddr().String())
-			conn.Close()
 			break
 		}
-
-		// _, err = conn.Write(response)
-		// if err != nil {
-		// 	fmt.Println(err)
-		// 	break
-		// }
 	}
 }
 
+// Connects to the master server and adds its connection to r.masterConn
 func (r *ReplicaServerImpl) dialMaster() {
 	conn, err := net.Dial("tcp", r.masterAddress)
 	if err != nil {
@@ -129,12 +124,14 @@ func (r *ReplicaServerImpl) dialMaster() {
 	r.masterConn = conn
 }
 
+// Sync with master, do the handshake and start handling the master replica connection
 func (r *ReplicaServerImpl) SyncWithMaster() {
 	fmt.Printf("Syncing with master: %s\n", r.masterAddress)
 	r.dialMaster()
 	err := r.doHandshake()
 	if err != nil {
 		fmt.Println("Error syncing with master: ", err)
+		// Fatal error, a replica cannot function without syncing with the master
 		os.Exit(1)
 	}
 	fmt.Printf("Synced with master: %s\n", r.masterAddress)
