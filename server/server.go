@@ -17,19 +17,32 @@ type RedisServer interface {
 	// Listen for TCP connections using our TCP listener.
 	// Encapsulates the request handling process
 	Listen()
+	// Send data to a client
 	SendTo(net.Conn, []byte)
+	// Handle client connections
 	HandleClientConnections(conn net.Conn)
+	// Increment the replication offset
 	AddAckOffset(offset int)
+	// Get the current replication offset
 	GetAckOffset() int
+	// Appends a request to the queue of requests for a given client, used for the MULTI command
 	AddToQueue(addr string, req Request)
+	// Removes a client from the queue of requests
 	RemoveFromQueue(addr string)
+	// Returns the queued requests for a given client
 	GetQueuedRequests(string) []Request
+	// Checks if a client is in the queue
 	IsInQueue(addr string) bool
+
+	// Advanced commands
 	XAdd(*Request) (string, error)
 	XRange(*Request) ([]StreamEntry, error)
 	XRead(XReadArg) (map[string][]StreamEntry, error)
 	Multi(addr string) error
+
+	// Implement the RDBManager interface
 	RDBManager
+	// Implement the Cache interface
 	Cache
 }
 
@@ -41,6 +54,7 @@ const (
 	EMPTY_RDB   = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
 )
 
+// RedisServerImpl implements the RedisServer interface
 type RedisServerImpl struct {
 	role              string
 	address           string
