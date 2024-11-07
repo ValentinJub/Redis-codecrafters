@@ -15,7 +15,7 @@ func main() {
 		os.Exit(1)
 	}
 	serverManager := server.NewServerManager(args)
-	server := serverManager.SpwanServer()
+	server := serverManager.SpawnServer()
 	server.LoadRDBToCache()
 	server.Init()
 	server.Listen()

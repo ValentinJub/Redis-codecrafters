@@ -10,7 +10,7 @@ const (
 
 // Manages the creation of Redis servers
 type ServerManager interface {
-	SpwanServer() RedisServer
+	SpawnServer() RedisServer
 }
 
 // Implementation of the ServerManager interface
@@ -24,7 +24,7 @@ func NewServerManager(args map[string]string) ServerManager {
 }
 
 // Spawns a Redis server based on the arguments passed to the manager
-func (s *ServerManagerImpl) SpwanServer() RedisServer {
+func (s *ServerManagerImpl) SpawnServer() RedisServer {
 	switch getServerType(s.args) {
 	case MASTER:
 		s.server = NewMasterServer(s.args)
