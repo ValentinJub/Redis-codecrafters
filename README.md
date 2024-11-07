@@ -31,9 +31,16 @@
 
 ## Features
 
-
 ## Commands
 
 - `DEL`
 - `EXISTS`
 - `COPY`
+
+## Design
+
+- Refactor ReqHandler so that it can send the responses to the client, currently it processes the request and returns the response a slice of byte
+that the server then sends to the client.
+It can use the SendTo method of its server to send the response to the client.
+- Improve ReqHandler to properly handle multiple request in the same buffer
+- Improve request parsing to handle multiple requests in the same buffer
