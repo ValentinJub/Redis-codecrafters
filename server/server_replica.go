@@ -45,7 +45,7 @@ func NewReplicaServer(args map[string]string) *ReplicaServerImpl {
 		fmt.Println("Missing argument for --replicaof")
 		os.Exit(1)
 	}
-	server := &ReplicaServerImpl{RedisServerImpl: RedisServerImpl{role: "slave", address: SERVER_ADDR, port: port, cache: NewCache(), replicationID: utils.CreateReplicationID(), QueuedRequests: map[string][]Request{}}, masterAddress: replicaof}
+	server := &ReplicaServerImpl{RedisServerImpl: RedisServerImpl{role: "slave", address: SERVER_ADDR, port: port, ConnectedClients: map[string]bool{}, cache: NewCache(), replicationID: utils.CreateReplicationID(), QueuedRequests: map[string][]Request{}}, masterAddress: replicaof}
 	server.rdb = NewRDBManager(dir, dbfile, server)
 	fmt.Printf("Replica RedisServer created with address: %s:%s and RDB info dir: %s file: %s\n", server.address, server.port, dir, dbfile)
 	return server
@@ -80,6 +80,7 @@ func (s *ReplicaServerImpl) Listen() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
+		s.AddClient(conn.RemoteAddr().String())
 		go s.HandleClientConnections(conn)
 	}
 }
@@ -100,15 +101,22 @@ func (s *ReplicaServerImpl) HandleClientConnections(conn net.Conn) {
 		}
 		// The data read from the TCP stream
 		request := buff[:bytesRead]
-		// Handles the decoded request and produce an answer
-		reqHandler := NewRequestHandler(request, s)
-		response := reqHandler.HandleRequest()
+		reqHandler := NewRequestHandler(request, s, conn)
+		// Handles the request and sends a response
+		reqHandler.HandleRequest()
 
-		_, err = conn.Write(response)
-		if err != nil {
-			fmt.Println(err)
+		// Check if the client is still connected
+		if !s.IsConnected(conn.RemoteAddr().String()) {
+			fmt.Printf("Client %s disconnected\n", conn.RemoteAddr().String())
+			conn.Close()
 			break
 		}
+
+		// _, err = conn.Write(response)
+		// if err != nil {
+		// 	fmt.Println(err)
+		// 	break
+		// }
 	}
 }
 

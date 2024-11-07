@@ -27,12 +27,18 @@ type RedisServer interface {
 	GetAckOffset() int
 	// Appends a request to the queue of requests for a given client, used for the MULTI command
 	AddToQueue(addr string, req Request)
+	// Add a client to the connected clients
+	AddClient(addr string)
 	// Removes a client from the queue of requests
 	RemoveFromQueue(addr string)
+	// Removes a client from the connected clients
+	RemoveClient(addr string)
 	// Returns the queued requests for a given client
 	GetQueuedRequests(string) []Request
 	// Checks if a client is in the queue
 	IsInQueue(addr string) bool
+	// Check if a client is connected
+	IsConnected(addr string) bool
 
 	// Advanced commands
 	XAdd(*Request) (string, error)
@@ -65,11 +71,17 @@ type RedisServerImpl struct {
 	replicationID     string
 	replicationOffset int
 	QueuedRequests    map[string][]Request // key is the address of the client
+	ConnectedClients  map[string]bool      // key is the address of the client
 }
 
 // Increment the replication offset
 func (s *RedisServerImpl) AddAckOffset(offset int) {
 	s.replicationOffset += offset
+}
+
+// Add a client to the connected clients
+func (s *RedisServerImpl) AddClient(addr string) {
+	s.ConnectedClients[addr] = true
 }
 
 // Appends a request to the queue of requests for a given client
@@ -88,6 +100,17 @@ func (s *RedisServerImpl) IsInQueue(addr string) bool {
 	return ok
 }
 
+// Check if a client is connected
+func (s *RedisServerImpl) IsConnected(addr string) bool {
+	_, ok := s.ConnectedClients[addr]
+	return ok
+}
+
+// Removes a client from the connected clients
+func (s *RedisServerImpl) RemoveClient(addr string) {
+	delete(s.ConnectedClients, addr)
+}
+
 // Returns the queued requests for a given client
 func (s *RedisServerImpl) GetQueuedRequests(addr string) []Request {
 	return s.QueuedRequests[addr]
@@ -98,6 +121,8 @@ func (s *RedisServerImpl) SendTo(conn net.Conn, data []byte) {
 	_, err := conn.Write(data)
 	if err != nil {
 		fmt.Println("Error sending data to client: ", err.Error())
+		fmt.Printf("Removing client: %s\n", conn.RemoteAddr().String())
+		s.RemoveClient(conn.RemoteAddr().String())
 	}
 }
 

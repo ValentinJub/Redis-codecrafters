@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,10 +22,11 @@ type RequestHandler interface {
 type ReqHandlerImpl struct {
 	request []byte
 	server  RedisServer
+	conn    net.Conn
 }
 
-func NewRequestHandler(request []byte, s RedisServer) *ReqHandlerImpl {
-	return &ReqHandlerImpl{request: request, server: s}
+func NewRequestHandler(request []byte, s RedisServer, conn net.Conn) *ReqHandlerImpl {
+	return &ReqHandlerImpl{request: request, server: s, conn: conn}
 }
 
 // Handles a request and returns a response
@@ -41,24 +43,25 @@ func (r *ReqHandlerImpl) HandleRequest() []byte {
 	for _, req := range reqs {
 		switch req.command {
 		case "PING":
-			return r.ping(&req)
+			r.server.SendTo(r.conn, r.ping(&req))
 		case "ECHO":
-			return r.echo(&req)
+			r.server.SendTo(r.conn, r.echo(&req))
 		case "GET":
-			return r.get(&req)
+			r.server.SendTo(r.conn, r.get(&req))
 		case "CONFIG":
-			return r.config(&req)
+			r.server.SendTo(r.conn, r.config(&req))
 		case "KEYS":
-			return r.keys(&req)
+			r.server.SendTo(r.conn, r.keys(&req))
 		case "INFO":
-			return r.info(&req)
+			r.server.SendTo(r.conn, r.info(&req))
 		case "TYPE":
 			if len(req.args) < 1 {
-				return newSimpleString("Error: TYPE command requires at least 1 argument")
+				r.server.SendTo(r.conn, newSimpleError("ERR TYPE command requires at least 1 argument"))
+				continue
 			}
-			return newSimpleString(r.server.Type(req.args[0]))
+			r.server.SendTo(r.conn, newSimpleString(r.server.Type(req.args[0])))
 		default:
-			return newSimpleString("Unknown command")
+			r.server.SendTo(r.conn, newSimpleError("ERR unknown command"))
 		}
 	}
 	return []byte{}
