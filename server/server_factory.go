@@ -1,5 +1,8 @@
 package server
 
+// Design pattern: Factory Method
+// This pattern is used to create Redis servers based on the arguments passed to the manager
+
 const (
 	MASTER  = "master"
 	REPLICA = "replica"

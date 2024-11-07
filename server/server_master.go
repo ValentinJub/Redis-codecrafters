@@ -134,7 +134,9 @@ func (s *MasterServerImpl) HandleClientConnections(conn net.Conn) {
 	}
 }
 
-// Send an RDB file to a Replica
+// The Redis Database file contains the on-disk representation of the Redis database
+// SendRDBFile sends the RDB file to the replica's connection passed in as an argument
+// This method is executed in a goroutine and we add a 1ms sleep to prevent the replica from receiving the RDB file before the FULLRESYNC command
 func (s *MasterServerImpl) SendRDBFile(conn net.Conn) error {
 	fmt.Printf("Sending RDB file to replica\n")
 	dir, dbfile := s.rdb.RDBInfo()
