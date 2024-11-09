@@ -11,20 +11,14 @@ import (
 
 type RedisServer interface {
 	CopyTo(source string, destination string, replace bool) error
-	// Initialise the server creating a TCP listener
+	Exists(keys []string) int
 	Init()
 	// Returns various information about the server
 	Info() map[string]string
-	// Listen for TCP connections using our TCP listener.
-	// Encapsulates the request handling process
 	Listen()
-	// Send data to a client
 	SendTo(net.Conn, []byte)
-	// Handle client connections
 	HandleClientConnections(conn net.Conn)
-	// Increment the replication offset
 	AddAckOffset(offset int)
-	// Get the current replication offset
 	GetAckOffset() int
 	// Appends a request to the queue of requests for a given client, used for the MULTI command
 	AddToQueue(addr string, req Request)
@@ -90,6 +84,16 @@ func (s *RedisServerImpl) AddToQueue(addr string, req Request) {
 	s.QueuedRequests[addr] = append(s.QueuedRequests[addr], req)
 }
 
+func (s *RedisServerImpl) Exists(keys []string) int {
+	count := 0
+	for _, key := range keys {
+		if s.cache.KeyExists(key) {
+			count++
+		}
+	}
+	return count
+}
+
 // Removes a client from the queue of requests
 func (s *RedisServerImpl) RemoveFromQueue(addr string) {
 	delete(s.QueuedRequests, addr)
@@ -152,7 +156,7 @@ func (s *RedisServerImpl) CopyTo(source, destination string, replace bool) error
 	if replace {
 		s.cache.Del([]string{destination})
 	} else {
-		if ok := s.cache.IsExpired(destination); !ok {
+		if ok := s.cache.KeyExists(destination); ok {
 			return fmt.Errorf("destination key exists")
 		}
 	}
@@ -182,6 +186,10 @@ func (s *RedisServerImpl) Copy(source, destination string) error {
 
 func (s *RedisServerImpl) Del(keys []string) int {
 	return s.cache.Del(keys)
+}
+
+func (s *RedisServerImpl) KeyExists(key string) bool {
+	return s.cache.KeyExists(key)
 }
 
 func (s *RedisServerImpl) Set(key, value string) error {

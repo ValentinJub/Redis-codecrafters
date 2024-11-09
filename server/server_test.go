@@ -192,6 +192,39 @@ var CopyTestCases = []struct {
 	},
 }
 
+var ExistsTestCases = []struct {
+	description    string
+	commands       [][]string
+	expectedOutput []string
+}{
+	{
+		description: "EXISTS command: check if key exists",
+		commands: [][]string{
+			{"SET", "name", "John"},
+			{"EXISTS", "name"},
+		},
+		expectedOutput: []string{"OK\n", "1\n"},
+	},
+	{
+		description: "EXISTS command: check if key does not exist",
+		commands: [][]string{
+			{"EXISTS", "balls"},
+		},
+		expectedOutput: []string{"0\n"},
+	},
+	{
+		description: "EXISTS command: check if multiple keys exist",
+		commands: [][]string{
+			{"SET", "name", "Poulo"},
+			{"EXISTS", "name"},
+			{"EXISTS", "hell"},
+			{"SET", "color", "Purple"},
+			{"EXISTS", "name", "color"},
+		},
+		expectedOutput: []string{"OK\n", "1\n", "0\n", "OK\n", "2\n"},
+	},
+}
+
 func StartMasterTestServer() RedisServer {
 	server := NewMasterServer(map[string]string{})
 	server.Init()
@@ -270,6 +303,24 @@ func TestCopyCommand(t *testing.T) {
 	// server := StartMasterTestServer()
 	// go server.Listen()
 	for _, tc := range CopyTestCases {
+		t.Run(tc.description, func(t *testing.T) {
+			for i, commands := range tc.commands {
+				out, err := runCommand("redis-cli", commands...)
+				if err != nil {
+					t.Fatalf("error while running the test: %s", err)
+				}
+				if out != tc.expectedOutput[i] {
+					t.Fatalf("expected output: %s, got: %s", tc.expectedOutput[i], out)
+				}
+			}
+		})
+	}
+}
+
+func TestExistsCommand(t *testing.T) {
+	// server := StartMasterTestServer()
+	// go server.Listen()
+	for _, tc := range ExistsTestCases {
 		t.Run(tc.description, func(t *testing.T) {
 			for i, commands := range tc.commands {
 				out, err := runCommand("redis-cli", commands...)

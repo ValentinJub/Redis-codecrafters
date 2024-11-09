@@ -8,10 +8,12 @@
 
 # Implemented commands
 
+- `COPY`
 - `DEL`
 - `DISCARD`
 - `ECHO`
 - `EXEC`
+- `EXISTS`
 - `GET`
 - `INFO`
 - `INCR`
@@ -34,8 +36,6 @@
 
 ## Commands
 
-- `EXISTS`
-- `COPY`
 
 ## Design
 

@@ -13,6 +13,8 @@ type Cache interface {
 	Copy(source, destination string) error
 	// Delete keys and return the number of keys deleted
 	Del(keys []string) int
+	// Check if a key exists
+	KeyExists(key string) bool
 	// Set a key value pair
 	Set(key string, value string) error
 	// Set a key value pair with an expiry time in milliseconds
@@ -97,6 +99,11 @@ func (s *CacheImpl) Copy(source, destination string) error {
 		return nil
 	}
 	return fmt.Errorf("source key does not exist")
+}
+
+func (s *CacheImpl) KeyExists(key string) bool {
+	_, ok := s.cache[key]
+	return ok
 }
 
 func (s *CacheImpl) Set(key string, value string) error {

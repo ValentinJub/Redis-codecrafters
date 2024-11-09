@@ -57,6 +57,8 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 
 	commandLen := len(newBulkArray(append([]string{req.command}, req.args...)...))
 	switch req.command {
+	case "EXISTS":
+		return newInteger(r.master.Exists(req.args))
 	// COPY <source> <destination> [REPLACE]
 	case "COPY":
 		if len(req.args) < 2 {
