@@ -9,16 +9,29 @@ import (
 )
 
 type Cache interface {
+	// Delete keys and return the number of keys deleted
+	Del(keys []string) int
+	// Set a key value pair
 	Set(key string, value string) error
+	// Set a key value pair with an expiry time in milliseconds
 	SetExpiry(key string, value string, expiry uint64) error
+	// Set a stream entry
 	SetStream(key, id string, fields map[string]string) (string, error)
+	// Get the value of a key
 	Get(key string) (string, error)
+	// Get the stream entries between start and end inclusive
 	GetStream(key string, start, end int) ([]StreamEntry, error)
+	// Get the last entry from a stream
 	GetLastEntryFromStream(key string) (StreamEntry, error)
+	// Increment the value of a key, if the key does not exist, create it with a value of 1
 	Increment(key string) (int, error)
+	// Return the keys matching the pattern in key
 	Keys(key string) []string
+	// Return the type of the key
 	Type(key string) string
+	// Set the expiry time of a key in milliseconds from now
 	ExpireIn(key string, milliseconds uint64) error
+	// Check if a key is expired
 	IsExpired(key string) bool
 }
 
@@ -79,6 +92,17 @@ func NewCache() *CacheImpl {
 func (s *CacheImpl) Set(key string, value string) error {
 	s.cache[key] = Object{value: value, stream: nil}
 	return nil
+}
+
+func (s *CacheImpl) Del(keys []string) int {
+	count := 0
+	for _, key := range keys {
+		if _, ok := s.cache[key]; ok {
+			delete(s.cache, key)
+			count++
+		}
+	}
+	return count
 }
 
 func (s *CacheImpl) Increment(key string) (int, error) {

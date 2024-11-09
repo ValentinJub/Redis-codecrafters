@@ -33,6 +33,8 @@ func (r *ReqHandlerMasterReplica) HandleRequest() {
 		commandLen := len(newBulkArray(append([]string{req.command}, req.args...)...))
 		switch req.command {
 		case "PING":
+		case "DEL":
+			r.replica.Del(req.args)
 		case "XADD":
 			id, err := r.replica.XAdd(&req)
 			if err != nil {

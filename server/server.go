@@ -116,7 +116,7 @@ func (s *RedisServerImpl) GetQueuedRequests(addr string) []Request {
 	return s.QueuedRequests[addr]
 }
 
-// Sends data to a client
+// Sends data to a client, removing the client if the send fails
 func (s *RedisServerImpl) SendTo(conn net.Conn, data []byte) {
 	_, err := conn.Write(data)
 	if err != nil {
@@ -163,6 +163,10 @@ func (s *RedisServerImpl) LoadRDBToCache() error {
 }
 
 // Implement the Cache interface
+
+func (s *RedisServerImpl) Del(keys []string) int {
+	return s.cache.Del(keys)
+}
 
 func (s *RedisServerImpl) Set(key, value string) error {
 	return s.cache.Set(key, value)

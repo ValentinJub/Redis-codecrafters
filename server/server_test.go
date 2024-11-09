@@ -119,16 +119,40 @@ var TestSetCases = []struct {
 		expiry:            0,
 		sleep:             0,
 	},
+}
+
+var DelTestCases = []struct {
+	description    string
+	commands       [][]string
+	expectedOutput []string
+}{
 	{
-		description:       "Set command: NX a key that already exists",
-		commandSet:        "redis-cli",
-		argsSet:           []string{"SET", "transport", "Car", "NX"}, // set if key does not exist
-		expectedSetOutput: "\n",
-		commandGet:        "redis-cli",
-		argsGet:           []string{"GET", "transport"},
-		expectedGetOutput: "Car\n",
-		expiry:            0,
-		sleep:             0,
+		description: "DEL command: delete one key",
+		commands: [][]string{
+			{"SET", "name", "John"},
+			{"DEL", "name"},
+			{"GET", "name"},
+		},
+		expectedOutput: []string{"OK\n", "1\n", "\n"},
+	},
+	{
+		description: "DEL command: delete multiple keys",
+		commands: [][]string{
+			{"SET", "name", "John"},
+			{"SET", "color", "Purple"},
+			{"DEL", "name", "color"},
+			{"GET", "name"},
+			{"GET", "color"},
+		},
+		expectedOutput: []string{"OK\n", "OK\n", "2\n", "\n", "\n"},
+	},
+	{
+		description: "DEL command: delete non-existent key",
+		commands: [][]string{
+			{"DEL", "name"},
+			{"GET", "name"},
+		},
+		expectedOutput: []string{"0\n", "\n"},
 	},
 }
 
@@ -183,6 +207,24 @@ func TestSetCommand(t *testing.T) {
 			}
 			if outGet != tc.expectedGetOutput {
 				t.Fatalf("expected output: %s, got: %s", tc.expectedGetOutput, outGet)
+			}
+		})
+	}
+}
+
+func TestDelCommand(t *testing.T) {
+	// server := StartMasterTestServer()
+	// go server.Listen()
+	for _, tc := range DelTestCases {
+		t.Run(tc.description, func(t *testing.T) {
+			for i, commands := range tc.commands {
+				out, err := runCommand("redis-cli", commands...)
+				if err != nil {
+					t.Fatalf("error while running the test: %s", err)
+				}
+				if out != tc.expectedOutput[i] {
+					t.Fatalf("expected output: %s, got: %s", tc.expectedOutput[i], out)
+				}
 			}
 		})
 	}

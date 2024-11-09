@@ -61,6 +61,8 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		return r.ping(&req)
 	case "ECHO":
 		return r.echo(&req)
+	case "DEL":
+		return newInteger(r.master.Del(req.args))
 	case "XADD":
 		resp, err := r.master.XAdd(&req)
 		if err != nil {

@@ -119,6 +119,7 @@ func (s *MasterServerImpl) HandleClientConnections(conn net.Conn) {
 		}
 		// The data read from the TCP stream
 		request := buff[:bytesRead]
+
 		// Handles the decoded request and produce an answer
 		reqHandler := NewReqHandlerMaster(request, s, conn)
 		response := reqHandler.HandleRequest()
