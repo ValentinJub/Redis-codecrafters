@@ -156,6 +156,42 @@ var DelTestCases = []struct {
 	},
 }
 
+var CopyTestCases = []struct {
+	description    string
+	commands       [][]string
+	expectedOutput []string
+}{
+	{
+		description: "COPY command: copy one key",
+		commands: [][]string{
+			{"SET", "name", "John"},
+			{"COPY", "name", "new_name"},
+			{"GET", "new_name"},
+		},
+		expectedOutput: []string{"OK\n", "1\n", "John\n"},
+	},
+	{
+		description: "COPY command: copy on an existing key without the REPLACE option",
+		commands: [][]string{
+			{"SET", "name", "John"},
+			{"SET", "new_name", "Jane"},
+			{"COPY", "name", "new_name"},
+			{"GET", "new_name"},
+		},
+		expectedOutput: []string{"OK\n", "OK\n", "0\n", "Jane\n"},
+	},
+	{
+		description: "COPY command: copy on an existing key with the REPLACE option",
+		commands: [][]string{
+			{"SET", "name", "Paul"},
+			{"SET", "new_name", "Jane"},
+			{"COPY", "name", "new_name", "REPLACE"},
+			{"GET", "new_name"},
+		},
+		expectedOutput: []string{"OK\n", "OK\n", "1\n", "Paul\n"},
+	},
+}
+
 func StartMasterTestServer() RedisServer {
 	server := NewMasterServer(map[string]string{})
 	server.Init()
@@ -216,6 +252,24 @@ func TestDelCommand(t *testing.T) {
 	// server := StartMasterTestServer()
 	// go server.Listen()
 	for _, tc := range DelTestCases {
+		t.Run(tc.description, func(t *testing.T) {
+			for i, commands := range tc.commands {
+				out, err := runCommand("redis-cli", commands...)
+				if err != nil {
+					t.Fatalf("error while running the test: %s", err)
+				}
+				if out != tc.expectedOutput[i] {
+					t.Fatalf("expected output: %s, got: %s", tc.expectedOutput[i], out)
+				}
+			}
+		})
+	}
+}
+
+func TestCopyCommand(t *testing.T) {
+	// server := StartMasterTestServer()
+	// go server.Listen()
+	for _, tc := range CopyTestCases {
 		t.Run(tc.description, func(t *testing.T) {
 			for i, commands := range tc.commands {
 				out, err := runCommand("redis-cli", commands...)

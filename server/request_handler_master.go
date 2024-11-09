@@ -57,12 +57,35 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 
 	commandLen := len(newBulkArray(append([]string{req.command}, req.args...)...))
 	switch req.command {
+	// COPY <source> <destination> [REPLACE]
+	case "COPY":
+		if len(req.args) < 2 {
+			return newSimpleError("ERR COPY command requires at least 2 arguments")
+		}
+		// check if REPLACE flag is present
+		replace := false
+		if len(req.args) > 2 {
+			for _, arg := range req.args[2:] {
+				if strings.ToUpper(arg) == "REPLACE" {
+					replace = true
+				}
+			}
+		}
+		err := r.master.CopyTo(req.args[0], req.args[1], replace)
+		if err != nil {
+			return newInteger(0)
+		}
+		return newInteger(1)
+	// PING [message]
 	case "PING":
 		return r.ping(&req)
+	// ECHO <message>
 	case "ECHO":
 		return r.echo(&req)
+	// DEL <key> [key ...]
 	case "DEL":
 		return newInteger(r.master.Del(req.args))
+	// XADD <key> <ID> <field> <value> [field value ...]
 	case "XADD":
 		resp, err := r.master.XAdd(&req)
 		if err != nil {
@@ -73,6 +96,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		r.master.CacheRequest(&req)
 		fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
 		return newBulkString(resp)
+	// SET <key> <value> [EX <seconds>] [PX <milliseconds>] [NX|XX]
 	case "SET":
 		resp, err := r.set(&req)
 		if err != nil {
@@ -83,6 +107,7 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		r.master.CacheRequest(&req)
 		fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
 		return resp
+	// INCR <key>
 	case "INCR":
 		if len(req.args) < 1 {
 			return newSimpleError("ERR INCR command requires at least 1 argument")
@@ -96,14 +121,17 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 		r.master.CacheRequest(&req)
 		fmt.Printf("Added %d bytes to Master offset, offset: %d\n", commandLen, r.master.GetAckOffset())
 		return newInteger(newValue)
+	// GET <key>
 	case "GET":
 		return r.get(&req)
+	// XRANGE <key> - + [COUNT <count>] [LIMIT <offset> <count>]
 	case "XRANGE":
 		entries, err := r.master.XRange(&req)
 		if err != nil {
 			return newSimpleError(err.Error())
 		}
 		return encodeXRangeResponse(entries)
+	// XREAD STREAMS <key> <id> [key id ...] [BLOCK <milliseconds>]
 	case "XREAD":
 		args, err := r.XReadArgParser(req.args)
 		if err != nil {
@@ -116,26 +144,36 @@ func (r *ReqHandlerMaster) HandleRequest() []byte {
 			return newBulkString("")
 		}
 		return encodeXReadResponse(args.keys, xreadEntries)
+	// MULTI
 	case "MULTI":
 		r.master.Multi(r.conn.RemoteAddr().String())
 		return newSimpleString("OK")
+	// EXEC
 	case "EXEC":
 		r.exec() // exec is self sufficient, it sends the response to the client
 		return []byte{}
+	// DISCARD
 	case "DISCARD":
 		return r.discard()
+	// CONFIG <set|get> <parameter> [value]
 	case "CONFIG":
 		return r.config(&req)
+	// KEYS <pattern>
 	case "KEYS":
 		return r.keys(&req)
+	// INFO [section]
 	case "INFO":
 		return r.info(&req)
+	// REPLCONF <option> <value>
 	case "REPLCONF":
 		return r.replicationConfig(&req)
+	// PSYNC <replicationID> <offset>
 	case "PSYNC":
 		return r.psync(&req)
+	// WAIT <numreplicas> <timeout>
 	case "WAIT":
 		return r.master.Wait(&req)
+	// TYPE <key>
 	case "TYPE":
 		if len(req.args) < 1 {
 			return newSimpleError("ERR TYPE command requires at least 1 argument")

@@ -8,6 +8,7 @@
 
 # Implemented commands
 
+- `DEL`
 - `DISCARD`
 - `ECHO`
 - `EXEC`
@@ -33,7 +34,6 @@
 
 ## Commands
 
-- `DEL`
 - `EXISTS`
 - `COPY`
 

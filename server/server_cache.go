@@ -9,6 +9,8 @@ import (
 )
 
 type Cache interface {
+	// Copy the value of a key to another key
+	Copy(source, destination string) error
 	// Delete keys and return the number of keys deleted
 	Del(keys []string) int
 	// Set a key value pair
@@ -87,6 +89,14 @@ func (s *StreamEntry) IsEmpty() bool {
 
 func NewCache() *CacheImpl {
 	return &CacheImpl{cache: make(map[string]Object)}
+}
+
+func (s *CacheImpl) Copy(source, destination string) error {
+	if v, ok := s.cache[source]; ok {
+		s.cache[destination] = v
+		return nil
+	}
+	return fmt.Errorf("source key does not exist")
 }
 
 func (s *CacheImpl) Set(key string, value string) error {

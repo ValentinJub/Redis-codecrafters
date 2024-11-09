@@ -10,6 +10,7 @@ import (
 )
 
 type RedisServer interface {
+	CopyTo(source string, destination string, replace bool) error
 	// Initialise the server creating a TCP listener
 	Init()
 	// Returns various information about the server
@@ -147,6 +148,17 @@ func (s *RedisServerImpl) Info() map[string]string {
 	}
 }
 
+func (s *RedisServerImpl) CopyTo(source, destination string, replace bool) error {
+	if replace {
+		s.cache.Del([]string{destination})
+	} else {
+		if ok := s.cache.IsExpired(destination); !ok {
+			return fmt.Errorf("destination key exists")
+		}
+	}
+	return s.cache.Copy(source, destination)
+}
+
 // Get the current replication offset
 func (s *RedisServerImpl) GetAckOffset() int {
 	return s.replicationOffset
@@ -163,6 +175,10 @@ func (s *RedisServerImpl) LoadRDBToCache() error {
 }
 
 // Implement the Cache interface
+
+func (s *RedisServerImpl) Copy(source, destination string) error {
+	return s.cache.Copy(source, destination)
+}
 
 func (s *RedisServerImpl) Del(keys []string) int {
 	return s.cache.Del(keys)
